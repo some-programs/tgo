@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -149,8 +150,12 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 }
 
 func (f *Flags) PrintHelp(w io.Writer) {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		fmt.Fprintf(w, "tgo %s\n", bi.Main.Version)
+	}
+
 	fmt.Fprint(w, `
-tgo settings:
+settings:
 
   tgo specific settings are controlled using environment variables so it
   doesn't clash with other arguments.
@@ -169,7 +174,9 @@ tgo settings:
 	for _, v := range AllStatuses {
 		statusNames = append(statusNames, string(v))
 	}
+
 	fmt.Fprint(w, "  valid values for TGO_RESULTS, TGO_SUMMARY and TGO_RES_HIDE: ", strings.Join(statusNames, ","), "\n\n")
+
 }
 
 func (f *Flags) printConfig(w io.Writer) {
