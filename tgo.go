@@ -10,9 +10,11 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,7 +105,7 @@ var (
 	skipColor     = color.New(color.FgHiMagenta).SprintFunc()
 	skipColorBold = color.New(color.FgHiMagenta, color.Bold).SprintFunc()
 
-	statusColors = map[Status](func(a ...interface{}) string){
+	statusColors = map[Status](func(a ...any) string){
 		StatusFail:  failColor,
 		StatusPass:  passColor,
 		StatusNone:  noneColor,
@@ -111,7 +113,7 @@ var (
 		StatusBench: passColor,
 	}
 
-	statusColorsBold = map[Status](func(a ...interface{}) string){
+	statusColorsBold = map[Status](func(a ...any) string){
 		StatusFail:  failColorBold,
 		StatusPass:  passColorBold,
 		StatusNone:  noneColorBold,
@@ -166,10 +168,8 @@ tgo settings:
 	var statusNames []string
 	for _, v := range AllStatuses {
 		statusNames = append(statusNames, string(v))
-
 	}
 	fmt.Fprint(w, "  valid values for TGO_RESULTS, TGO_SUMMARY and TGO_RES_HIDE: ", strings.Join(statusNames, ","), "\n\n")
-
 }
 
 func (f *Flags) printConfig(w io.Writer) {
@@ -180,7 +180,6 @@ TGO config:
   TGO_RES_HIDE: %s
 
 `, f.Results.String(), f.Summary.String(), f.HideEmptyResults.String())
-
 }
 
 func (f *Flags) Setup(args []string) {
@@ -274,10 +273,8 @@ type Statuses []Status
 
 func (ss Statuses) Any(statuses ...Status) bool {
 	for _, s := range ss {
-		for _, status := range statuses {
-			if s == status {
-				return true
-			}
+		if slices.Contains(statuses, s) {
+			return true
 		}
 	}
 	return false
@@ -328,17 +325,16 @@ func (ss *Statuses) Set(value string) error {
 
 // Event .
 //
-//
 // The Action field is one of a fixed set of action descriptions:
-//    run    - the test has started running
-//    pause  - the test has been paused
-//    cont   - the test has continued running
-//    pass   - the test passed
-//    bench  - the benchmark printed log output but did not fail
-//    fail   - the test or benchmark failed
-//    output - the test printed output
-//    skip   - the test was skipped or the package contained no tests
 //
+//	run    - the test has started running
+//	pause  - the test has been paused
+//	cont   - the test has continued running
+//	pass   - the test passed
+//	bench  - the benchmark printed log output but did not fail
+//	fail   - the test or benchmark failed
+//	output - the test printed output
+//	skip   - the test was skipped or the package contained no tests
 type Event struct {
 	Time    time.Time // encodes as an RFC3339-format string
 	Action  Action
@@ -400,10 +396,8 @@ func (es Events) Status() Status {
 
 func (es Events) FindFirstByAction(actions ...Action) *Event {
 	for _, v := range es {
-		for _, action := range actions {
-			if v.Action == action {
-				return &v
-			}
+		if slices.Contains(actions, v.Action) {
+			return &v
 		}
 	}
 	return nil
@@ -632,9 +626,7 @@ func (ts TestStorage) Append(e Event) {
 func (ts TestStorage) Union(values ...TestStorage) TestStorage {
 	tests := make(TestStorage, 0)
 	for _, values := range values {
-		for k, v := range values {
-			tests[k] = v
-		}
+		maps.Copy(tests, values)
 	}
 	return tests
 }
