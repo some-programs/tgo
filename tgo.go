@@ -39,29 +39,35 @@ var (
 )
 
 var (
-	ActionRun    = Action("run")
-	ActionPause  = Action("pause")
-	ActionCont   = Action("cont")
-	ActionPass   = Action("pass")
-	ActionBench  = Action("bench")
-	ActionFail   = Action("fail")
-	ActionOutput = Action("output")
-	ActionSkip   = Action("skip")
+	ActionStart       = Action("start")
+	ActionRun         = Action("run")
+	ActionPause       = Action("pause")
+	ActionCont        = Action("cont")
+	ActionPass        = Action("pass")
+	ActionBench       = Action("bench")
+	ActionFail        = Action("fail")
+	ActionOutput      = Action("output")
+	ActionSkip        = Action("skip")
+	ActionFinish      = Action("finish")
+	ActionBuildOutput = Action("build-output")
+	ActionBuildFail   = Action("build-fail")
 
 	AllActions = Actions{
 		ActionRun, ActionPause, ActionCont, ActionPass,
 		ActionBench, ActionFail, ActionOutput, ActionSkip,
+		ActionStart, ActionFinish, ActionBuildOutput, ActionBuildFail,
 	}
 
-	EndingActions = Actions{ActionFail, ActionSkip, ActionPass, ActionBench}
+	EndingActions = Actions{ActionFail, ActionSkip, ActionPass, ActionBench, ActionBuildFail}
 )
 
 var (
-	StatusPass  = Status(ActionPass)
-	StatusFail  = Status(ActionFail)
-	StatusSkip  = Status(ActionSkip)
-	StatusBench = Status(ActionBench)
-	StatusNone  = Status("none")
+	StatusPass      = Status(ActionPass)
+	StatusFail      = Status(ActionFail)
+	StatusSkip      = Status(ActionSkip)
+	StatusBench     = Status(ActionBench)
+	StatusBuildFail = Status(ActionBuildFail)
+	StatusNone      = Status("none")
 
 	AllStatuses = Statuses{
 		StatusBench,
@@ -69,18 +75,22 @@ var (
 		StatusSkip,
 		StatusNone,
 		StatusFail,
+		StatusBuildFail,
 	}
 	DefaultStatuses = Statuses{
 		StatusNone,
 		StatusFail,
+		StatusBuildFail,
+		StatusBench,
 	}
 
 	statusNames = map[Status]string{
-		StatusFail:  "FAIL",
-		StatusPass:  "PASS",
-		StatusNone:  "NONE",
-		StatusSkip:  "SKIP",
-		StatusBench: "BENCH",
+		StatusFail:      "FAIL",
+		StatusPass:      "PASS",
+		StatusNone:      "NONE",
+		StatusSkip:      "SKIP",
+		StatusBench:     "BENCH",
+		StatusBuildFail: "BUILD FAIL",
 	}
 )
 
@@ -107,19 +117,21 @@ var (
 	skipColorBold = color.New(color.FgHiMagenta, color.Bold).SprintFunc()
 
 	statusColors = map[Status](func(a ...any) string){
-		StatusFail:  failColor,
-		StatusPass:  passColor,
-		StatusNone:  noneColor,
-		StatusSkip:  skipColor,
-		StatusBench: passColor,
+		StatusFail:      failColor,
+		StatusPass:      passColor,
+		StatusNone:      noneColor,
+		StatusSkip:      skipColor,
+		StatusBench:     passColor,
+		StatusBuildFail: failColor,
 	}
 
 	statusColorsBold = map[Status](func(a ...any) string){
-		StatusFail:  failColorBold,
-		StatusPass:  passColorBold,
-		StatusNone:  noneColorBold,
-		StatusSkip:  skipColorBold,
-		StatusBench: passColorBold,
+		StatusFail:      failColorBold,
+		StatusPass:      passColorBold,
+		StatusNone:      noneColorBold,
+		StatusSkip:      skipColorBold,
+		StatusBench:     passColorBold,
+		StatusBuildFail: failColorBold,
 	}
 )
 
@@ -136,8 +148,8 @@ type Flags struct {
 }
 
 func (f *Flags) Register(fs *flag.FlagSet) {
-	f.Results = Statuses{StatusFail, StatusNone}
-	f.Summary = Statuses{StatusFail, StatusNone}
+	f.Results = Statuses{StatusFail, StatusNone, StatusBuildFail}
+	f.Summary = Statuses{StatusFail, StatusNone, StatusBuildFail}
 
 	fs.StringVar(&f.Bin, "bin", "go", "go binary name")
 	fs.Var(&f.Results, "results", "types of results to show")
@@ -176,7 +188,6 @@ settings:
 	}
 
 	fmt.Fprint(w, "  valid values for TGO_RESULTS, TGO_SUMMARY and TGO_RES_HIDE: ", strings.Join(statusNames, ","), "\n\n")
-
 }
 
 func (f *Flags) printConfig(w io.Writer) {
@@ -342,18 +353,28 @@ func (ss *Statuses) Set(value string) error {
 //	fail   - the test or benchmark failed
 //	output - the test printed output
 //	skip   - the test was skipped or the package contained no tests
+//	start  - the test binary is about to be executed
+//	finish - the test binary has finished executing
+//	build-output - the build tool produced output
+//	build-fail   - the build failed
 type Event struct {
-	Time    time.Time // encodes as an RFC3339-format string
-	Action  Action
-	Package string
-	Test    string
-	Elapsed float64 // seconds
-	Output  string
+	Time        time.Time // encodes as an RFC3339-format string
+	Action      Action
+	Package     string
+	ImportPath  string // new in go 1.24 for build-output
+	Test        string
+	Elapsed     float64 // seconds
+	Output      string
+	FailedBuild string // package ID of the package that failed to build
 }
 
 func (t Event) Key() Key {
+	pkg := t.Package
+	if pkg == "" {
+		pkg = t.ImportPath
+	}
 	return Key{
-		Package: t.Package,
+		Package: pkg,
 		Test:    t.Test,
 	}
 }
@@ -387,6 +408,9 @@ func (es Events) Status() Status {
 
 		case ActionFail:
 			return StatusFail
+
+		case ActionBuildFail:
+			return StatusBuildFail
 
 		case ActionPass:
 			return StatusPass
@@ -445,6 +469,8 @@ loop:
 		if e.Action == "run" ||
 			e.Action == "cont" ||
 			e.Action == "pause" ||
+			e.Action == "start" ||
+			e.Action == "finish" ||
 			(e.Action == "output" && e.Test != "" &&
 				((output == fmt.Sprintf("=== RUN   %s\n", e.Test)) ||
 					(output == fmt.Sprintf("=== CONT  %s\n", e.Test)) ||
@@ -537,6 +563,9 @@ loop:
 	case StatusFail:
 		event = events.FindFirstByAction(ActionFail)
 		textColor = failColor
+	case StatusBuildFail:
+		event = events.FindFirstByAction(ActionBuildFail)
+		textColor = failColor
 	case StatusPass:
 		event = events.FindFirstByAction(ActionPass)
 		// textColor = passColor
@@ -624,6 +653,12 @@ func (ts TestStorage) OrderedKeys() []Key {
 
 // Append event into tests
 func (ts TestStorage) Append(e Event) {
+	if e.Package == "" && e.ImportPath != "" {
+		e.Package = e.ImportPath
+	}
+	if e.Action == ActionBuildOutput {
+		e.Action = ActionOutput
+	}
 	key := e.Key()
 	events, _ := ts[key]
 	events = append(events, e)
@@ -631,7 +666,8 @@ func (ts TestStorage) Append(e Event) {
 }
 
 func (ts TestStorage) Union(values ...TestStorage) TestStorage {
-	tests := make(TestStorage, 0)
+	tests := make(TestStorage, len(ts))
+	maps.Copy(tests, ts)
 	for _, values := range values {
 		maps.Copy(tests, values)
 	}
@@ -691,6 +727,11 @@ loop:
 				tests[key] = events
 				continue loop
 			}
+			// If we mapped build-fail to fail in Append, we need to handle it here
+			if action == ActionBuildFail && e.Action == ActionFail && e.FailedBuild != "" {
+				tests[key] = events
+				continue loop
+			}
 		}
 	}
 	return tests
@@ -742,7 +783,18 @@ loop:
 }
 
 func (ts TestStorage) CountTests() int {
-	return len(ts.FilterPackageResults())
+	count := 0
+	for key, events := range ts {
+		if key.Test != "" {
+			count++
+			continue
+		}
+		// If it's a package result, check if it's a build failure
+		if events.Status() == StatusBuildFail {
+			count++
+		}
+	}
+	return count
 }
 
 func (ts TestStorage) PrintShortSummary(status Status) {
@@ -791,7 +843,8 @@ func (ts TestStorage) PrintShortSummary(status Status) {
 func (ts TestStorage) PrintSummary(status Status) {
 	// count := ts.CountTests()
 	statusColor := statusColors[status]
-	header := statusColor(statusNames[status])
+	statusBold := statusColorsBold[status]
+	header := statusBold(statusNames[status])
 	hr := statusColor("════════════")
 	prefix := statusColor(fmt.Sprintf("%6s ", statusNames[status]))
 
@@ -991,7 +1044,11 @@ scan:
 				if len(filtered) > 0 {
 					filtered.PrintSummary(status)
 				}
-
+			} else if status == StatusBuildFail {
+				filtered := tests.FindByAction(ActionBuildFail)
+				if len(filtered) > 0 {
+					filtered.PrintSummary(status)
+				}
 			} else {
 				for _, action := range EndingActions {
 					if status.IsAction(action) {
@@ -1022,17 +1079,20 @@ scan:
 
 		{
 			allFail := tests.FindByAction(ActionFail)
+			allBuildFail := tests.FindByAction(ActionBuildFail)
 			allPass := tests.FindByAction(ActionPass)
 			allSkip := tests.FindByAction(ActionSkip)
 			allNone := tests.FilterAction(EndingActions...)
 
 			countPass := allPass.CountTests()
 			countFail := allFail.CountTests()
+			countBuildFail := allBuildFail.CountTests()
 			countNone := len(allNone)
 			countSkip := allSkip.CountTests()
 
 			pass := statusNames[StatusPass] + ":" + fmt.Sprint(countPass)
 			fail := statusNames[StatusFail] + ":" + fmt.Sprint(countFail)
+			buildfail := statusNames[StatusBuildFail] + ":" + fmt.Sprint(countBuildFail)
 			none := statusNames[StatusNone] + ":" + fmt.Sprint(countNone)
 			skip := statusNames[StatusSkip] + ":" + fmt.Sprint(countSkip)
 
@@ -1048,9 +1108,10 @@ scan:
 				none = statusColor(none)
 			}
 
-			if countFail > 0 {
+			if countFail > 0 || countBuildFail > 0 {
 				statusColor = failColorBold
 				fail = statusColor(fail)
+				buildfail = statusColor(buildfail)
 			}
 
 			// if countSkip > 0 {
@@ -1063,6 +1124,7 @@ scan:
 				statusColor(time.Now().Format("15:04:05")) +
 				sep + pass +
 				sep + fail +
+				sep + buildfail +
 				sep + none +
 				sep + skip +
 				sep + statusColor(time.Now().Sub(t0).Round(time.Millisecond).String()) +
