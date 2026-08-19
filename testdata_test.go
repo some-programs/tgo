@@ -120,6 +120,17 @@ func TestErrors(t *testing.T) {
 }
 `),
 	},
+	"mixed/mixed_test.go": {
+		Data: []byte(`package mixed
+
+import "testing"
+
+func TestMixed(t *testing.T) {
+	t.Log("this is a log line")
+	t.Errorf("first error line\nsecond error line")
+}
+`),
+	},
 }
 
 // setupTestDir creates a temporary directory populated with testDataFS test files.

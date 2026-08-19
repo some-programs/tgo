@@ -111,3 +111,20 @@ func TestRun_Crash(t *testing.T) {
 		t.Errorf("expected error for crashed test, got nil")
 	}
 }
+
+func TestRun_Mixed_With_V(t *testing.T) {
+	t.Parallel()
+	dir := setupTestDir(t)
+	flags := Flags{
+		Bin:     "go",
+		Dir:     dir,
+		V:       V2,
+		Results: Statuses{StatusBench, StatusPass, StatusNone, StatusFail},
+		Summary: Statuses{StatusNone, StatusFail},
+	}
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"-v", "./mixed"})
+	if err == nil {
+		t.Errorf("expected error for mixed failing test, got nil")
+	}
+}
+

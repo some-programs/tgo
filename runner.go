@@ -38,7 +38,12 @@ func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv 
 	}
 
 	args := []string{"test", "-json"}
-	args = append(args, argv...)
+	for _, v := range argv {
+		if v == "-v" {
+			continue
+		}
+		args = append(args, v)
+	}
 	log.Println("args", args)
 
 	cmd := exec.CommandContext(ctx, flags.Bin, args...)

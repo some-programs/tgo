@@ -234,6 +234,32 @@ BUILD FAIL testcases/buildfail [testcases/buildfail.test]
 ══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
 		},
+		{
+			name: "Mixed_With_V",
+			args: []string{"-v", "./mixed"},
+			flags: Flags{
+				Bin:     "go",
+				V:       V2,
+				Results: Statuses{StatusBench, StatusPass, StatusNone, StatusFail},
+				Summary: Statuses{StatusNone, StatusFail},
+			},
+			wantErr: true,
+			wantOutput: `
+*****
+=== FAIL testcases/mixed.TestMixed
+
+    mixed_test.go:6: this is a log line
+    mixed_test.go:7: first error line
+        second error line
+
+=== FAIL testcases/mixed
+════════════ FAIL ════════════
+  FAIL testcases/mixed.TestMixed
+  FAIL testcases/mixed
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -345,6 +371,26 @@ func TestFullProgram_CLI(t *testing.T) {
 100.0% testcases/cov
 
 ══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name:    "Mixed_With_V",
+			args:    []string{"-v", "./mixed"},
+			wantErr: true,
+			wantOutput: `
+*****
+=== FAIL testcases/mixed.TestMixed
+
+    mixed_test.go:6: this is a log line
+    mixed_test.go:7: first error line
+        second error line
+
+=== FAIL testcases/mixed
+════════════ FAIL ════════════
+  FAIL testcases/mixed.TestMixed
+  FAIL testcases/mixed
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
 		},
 	}
