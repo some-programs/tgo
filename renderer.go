@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -175,17 +176,37 @@ loop:
 	if len(filteredEvents) > 0 {
 		fmt.Fprintln(w, "")
 	}
+	hasOutputType := slices.ContainsFunc(filteredEvents, func(e Event) bool {
+		return e.OutputType != OutputTypeBlank
+	})
 	for _, e := range filteredEvents {
 		var ss []string
 		if flags.V >= V3 {
 			ss = append(ss, fmt.Sprintf("%7s", e.Action), e.Time.Format("15:04:05.999"))
 		}
-		ss = append(ss, textColor(strings.TrimSuffix(e.Output, "\n")), "\n")
+		colorFn := r.eventTextColor(e, status, hasOutputType, textColor)
+		ss = append(ss, colorFn(strings.TrimSuffix(e.Output, "\n")), "\n")
 		fmt.Fprint(w, strings.Join(ss, " "))
 	}
 	if len(filteredEvents) > 0 {
 		fmt.Fprintln(w, "")
 	}
+}
+
+func (r *Renderer) eventTextColor(e Event, status Status, hasOutputType bool, fallbackColor func(a ...any) string) func(a ...any) string {
+	if hasOutputType {
+		switch {
+		case e.IsErrorHeader():
+			return failColorBold
+		case e.IsErrorContinue():
+			return failColor
+		case status == StatusSkip:
+			return skipColor
+		default:
+			return defaultColor
+		}
+	}
+	return fallbackColor
 }
 
 // PrintShortSummary prints a condensed package summary for a given status.

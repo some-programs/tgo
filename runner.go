@@ -23,6 +23,10 @@ func (e ExitError) Error() string {
 }
 
 func run(ctx context.Context, flags Flags, argv []string) error {
+	return runWithRenderer(ctx, flags, defaultRenderer, argv)
+}
+
+func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv []string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -52,7 +56,7 @@ func run(ctx context.Context, flags Flags, argv []string) error {
 	}
 
 	t0 := time.Now()
-	if err := processEvents(stdout, flags, defaultRenderer, coverEnabled, t0); err != nil {
+	if err := processEvents(stdout, flags, renderer, coverEnabled, t0); err != nil {
 		log.Println("process error:", err)
 	}
 

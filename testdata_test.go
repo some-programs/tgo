@@ -9,7 +9,7 @@ import (
 
 var testDataFS = fstest.MapFS{
 	"go.mod": {
-		Data: []byte("module testcases\n\ngo 1.24\n"),
+		Data: []byte("module testcases\n\ngo 1.27\n"),
 	},
 	"bench/bench_test.go": {
 		Data: []byte(`package bench
@@ -87,6 +87,36 @@ import "testing"
 
 func TestSkip(t *testing.T) {
 	t.Skip("skipping test")
+}
+`),
+	},
+	"cov/cov.go": {
+		Data: []byte(`package cov
+
+func Add(a, b int) int {
+	return a + b
+}
+`),
+	},
+	"cov/cov_test.go": {
+		Data: []byte(`package cov
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+	if Add(1, 2) != 3 {
+		t.Fail()
+	}
+}
+`),
+	},
+	"errtypes/errtypes_test.go": {
+		Data: []byte(`package errtypes
+
+import "testing"
+
+func TestErrors(t *testing.T) {
+	t.Errorf("first error line\nsecond error line")
 }
 `),
 	},

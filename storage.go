@@ -42,6 +42,9 @@ func (ts TestStorage) Append(e Event) {
 	if e.Package == "" && e.ImportPath != "" {
 		e.Package = e.ImportPath
 	}
+	if e.Package == "" && e.FailedBuild != "" {
+		e.Package = e.FailedBuild
+	}
 	if e.Action == ActionBuildOutput {
 		e.Action = ActionOutput
 	}

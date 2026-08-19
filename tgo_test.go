@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"testing"
 )
 
@@ -12,7 +13,7 @@ func TestRun_Pass(t *testing.T) {
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
-	err := run(context.Background(), flags, []string{"./pass"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"./pass"})
 	if err != nil {
 		t.Errorf("expected no error for passing test, got %v", err)
 	}
@@ -25,7 +26,7 @@ func TestRun_Fail(t *testing.T) {
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
-	err := run(context.Background(), flags, []string{"./fail"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"./fail"})
 	if err == nil {
 		t.Errorf("expected error for failing test, got nil")
 	}
@@ -38,7 +39,7 @@ func TestRun_BuildFail(t *testing.T) {
 		Results: Statuses{StatusFail, StatusNone, StatusBuildFail},
 		Summary: Statuses{StatusFail, StatusNone, StatusBuildFail},
 	}
-	err := run(context.Background(), flags, []string{"./buildfail"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"./buildfail"})
 	if err == nil {
 		t.Errorf("expected error for build failing test, got nil")
 	}
@@ -51,7 +52,7 @@ func TestRun_Skip(t *testing.T) {
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
-	err := run(context.Background(), flags, []string{"./skip"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"./skip"})
 	if err != nil {
 		t.Errorf("expected no error for skipping test, got %v", err)
 	}
@@ -64,7 +65,7 @@ func TestRun_Bench(t *testing.T) {
 		Results: Statuses{StatusBench},
 		Summary: Statuses{StatusBench},
 	}
-	err := run(context.Background(), flags, []string{"-bench", ".", "./bench"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"-bench", ".", "./bench"})
 	if err != nil {
 		t.Errorf("expected no error for benchmark, got %v", err)
 	}
@@ -78,7 +79,7 @@ func TestRun_Output(t *testing.T) {
 		Summary: Statuses{StatusPass},
 		V:       V4,
 	}
-	err := run(context.Background(), flags, []string{"./output"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"./output"})
 	if err != nil {
 		t.Errorf("expected no error for test with output, got %v", err)
 	}
@@ -91,7 +92,7 @@ func TestRun_Crash(t *testing.T) {
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
-	err := run(context.Background(), flags, []string{"./crash"})
+	err := runWithRenderer(context.Background(), flags, NewRenderer(io.Discard), []string{"./crash"})
 	if err == nil {
 		t.Errorf("expected error for crashed test, got nil")
 	}

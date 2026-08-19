@@ -109,6 +109,29 @@ var (
 	}
 )
 
+// OutputType represents the type of output emitted by a test event.
+type OutputType string
+
+func (o OutputType) String() string {
+	return string(o)
+}
+
+const (
+	OutputTypeBlank         OutputType = ""
+	OutputTypeFrame         OutputType = "frame"
+	OutputTypeError         OutputType = "error"
+	OutputTypeErrorContinue OutputType = "error-continue"
+)
+
+var (
+	AllOutputTypes = []OutputType{
+		OutputTypeBlank,
+		OutputTypeFrame,
+		OutputTypeError,
+		OutputTypeErrorContinue,
+	}
+)
+
 // Key identifies a package and test together.
 type Key struct {
 	Package string
@@ -124,20 +147,40 @@ func (t Key) String() string {
 
 // Event represents a single JSON event emitted by go test -json.
 type Event struct {
-	Time        time.Time // encodes as an RFC3339-format string
-	Action      Action
-	Package     string
-	ImportPath  string // new in go 1.24 for build-output
-	Test        string
-	Elapsed     float64 // seconds
-	Output      string
-	FailedBuild string // package ID of the package that failed to build
+	Time        time.Time  `json:"Time"` // encodes as an RFC3339-format string
+	Action      Action     `json:"Action,omitempty"`
+	Package     string     `json:"Package,omitempty"`
+	ImportPath  string     `json:"ImportPath,omitempty"` // new in go 1.24 for build-output
+	Test        string     `json:"Test,omitempty"`
+	Elapsed     float64    `json:"Elapsed,omitempty"` // seconds
+	Output      string     `json:"Output,omitempty"`
+	OutputType  OutputType `json:"OutputType,omitempty"`  // new in go 1.27
+	FailedBuild string     `json:"FailedBuild,omitempty"` // package ID of the package that failed to build
+}
+
+func (e Event) IsFrame() bool {
+	return e.OutputType == OutputTypeFrame
+}
+
+func (e Event) IsError() bool {
+	return e.OutputType == OutputTypeError || e.OutputType == OutputTypeErrorContinue
+}
+
+func (e Event) IsErrorHeader() bool {
+	return e.OutputType == OutputTypeError
+}
+
+func (e Event) IsErrorContinue() bool {
+	return e.OutputType == OutputTypeErrorContinue
 }
 
 func (t Event) Key() Key {
 	pkg := t.Package
 	if pkg == "" {
 		pkg = t.ImportPath
+	}
+	if pkg == "" {
+		pkg = t.FailedBuild
 	}
 	return Key{
 		Package: pkg,
@@ -222,6 +265,10 @@ func isIgnoredEvent(e Event, passedAt, failedAt, skippedAt float64) bool {
 
 	if e.Action != ActionOutput {
 		return false
+	}
+
+	if e.OutputType == OutputTypeFrame {
+		return true
 	}
 
 	output := strings.TrimLeft(e.Output, " ")

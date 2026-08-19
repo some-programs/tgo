@@ -1,9 +1,8 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
-	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +96,61 @@ func TestStatus_Methods(t *testing.T) {
 	}
 }
 
+func TestOutputType_Methods(t *testing.T) {
+	tests := []struct {
+		outputType OutputType
+		wantStr    string
+	}{
+		{OutputTypeBlank, ""},
+		{OutputTypeFrame, "frame"},
+		{OutputTypeError, "error"},
+		{OutputTypeErrorContinue, "error-continue"},
+	}
+
+	for _, tt := range tests {
+		if got := tt.outputType.String(); got != tt.wantStr {
+			t.Errorf("%q.String() = %q, want %q", tt.outputType, got, tt.wantStr)
+		}
+	}
+
+	if len(AllOutputTypes) != 4 {
+		t.Errorf("expected 4 output types, got %d", len(AllOutputTypes))
+	}
+
+	frameEv := Event{OutputType: OutputTypeFrame}
+	if !frameEv.IsFrame() {
+		t.Error("expected IsFrame() to be true for OutputTypeFrame")
+	}
+	if frameEv.IsError() {
+		t.Error("expected IsError() to be false for OutputTypeFrame")
+	}
+
+	errEv := Event{OutputType: OutputTypeError}
+	if errEv.IsFrame() {
+		t.Error("expected IsFrame() to be false for OutputTypeError")
+	}
+	if !errEv.IsError() {
+		t.Error("expected IsError() to be true for OutputTypeError")
+	}
+	if !errEv.IsErrorHeader() {
+		t.Error("expected IsErrorHeader() to be true for OutputTypeError")
+	}
+	if errEv.IsErrorContinue() {
+		t.Error("expected IsErrorContinue() to be false for OutputTypeError")
+	}
+
+	errContEv := Event{OutputType: OutputTypeErrorContinue}
+	if !errContEv.IsError() {
+		t.Error("expected IsError() to be true for OutputTypeErrorContinue")
+	}
+	if errContEv.IsErrorHeader() {
+		t.Error("expected IsErrorHeader() to be false for OutputTypeErrorContinue")
+	}
+	if !errContEv.IsErrorContinue() {
+		t.Error("expected IsErrorContinue() to be true for OutputTypeErrorContinue")
+	}
+}
+
 func TestEvent_Status(t *testing.T) {
 	tests := []struct {
 		event Event
@@ -172,6 +226,37 @@ func TestEvent_Key(t *testing.T) {
 	e2 := Event{ImportPath: "import", Test: "test"}
 	if e2.Key().Package != "import" || e2.Key().Test != "test" {
 		t.Errorf("unexpected key: %v", e2.Key())
+	}
+
+	e3 := Event{FailedBuild: "badpkg", Test: "test"}
+	if e3.Key().Package != "badpkg" || e3.Key().Test != "test" {
+		t.Errorf("unexpected key: %v", e3.Key())
+	}
+}
+
+func TestEvent_JSON(t *testing.T) {
+	raw := `{"Time":"2026-08-19T10:00:00Z","Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"=== RUN TestFoo\n","OutputType":"frame"}`
+	var e Event
+	if err := json.Unmarshal([]byte(raw), &e); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if e.OutputType != OutputTypeFrame {
+		t.Errorf("expected OutputType %q, got %q", OutputTypeFrame, e.OutputType)
+	}
+	if !e.IsFrame() {
+		t.Error("expected IsFrame() to be true")
+	}
+
+	rawErr := `{"Time":"2026-08-19T10:00:00Z","Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"error here\n","OutputType":"error"}`
+	var eErr Event
+	if err := json.Unmarshal([]byte(rawErr), &eErr); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if eErr.OutputType != OutputTypeError {
+		t.Errorf("expected OutputType %q, got %q", OutputTypeError, eErr.OutputType)
+	}
+	if !eErr.IsError() {
+		t.Error("expected IsError() to be true")
 	}
 }
 
@@ -265,6 +350,20 @@ func TestEvents_Methods(t *testing.T) {
 		if compacted[1].Action != ActionPass {
 			t.Errorf("expected ActionPass, got %s", compacted[1].Action)
 		}
+
+		// Test OutputTypeFrame compaction
+		esFrame := Events{
+			{Action: ActionOutput, Test: "test", Output: "framing header\n", OutputType: OutputTypeFrame},
+			{Action: ActionOutput, Test: "test", Output: "real log\n", OutputType: OutputTypeBlank},
+			{Action: ActionOutput, Test: "test", Output: "error details\n", OutputType: OutputTypeError},
+		}
+		compactedFrame := esFrame.Compact()
+		if len(compactedFrame) != 2 {
+			t.Errorf("unexpected number of compacted frame events: %d, expected 2", len(compactedFrame))
+		}
+		if compactedFrame[0].Output != "real log\n" || compactedFrame[1].Output != "error details\n" {
+			t.Errorf("unexpected compacted events: %+v", compactedFrame)
+		}
 	})
 
 	t.Run("IsPackageWithoutTest", func(t *testing.T) {
@@ -291,6 +390,23 @@ func TestTestStorage_Methods(t *testing.T) {
 	ts.Append(Event{Package: "pkg", Test: "test1", Action: ActionPass})
 	ts.Append(Event{Package: "pkg", Test: "test2", Action: ActionFail})
 	ts.Append(Event{Package: "pkg", Action: ActionPass})
+
+	t.Run("Append_FailedBuild", func(t *testing.T) {
+		storage := make(TestStorage)
+		storage.Append(Event{FailedBuild: "build/fail/pkg", Action: ActionFail})
+		if _, ok := storage[Key{Package: "build/fail/pkg"}]; !ok {
+			t.Errorf("expected storage to have key with package 'build/fail/pkg'")
+		}
+	})
+
+	t.Run("Append_ImportPath", func(t *testing.T) {
+		storage := make(TestStorage)
+		storage.Append(Event{ImportPath: "import/pkg", Action: ActionBuildOutput})
+		events, ok := storage[Key{Package: "import/pkg"}]
+		if !ok || len(events) != 1 || events[0].Action != ActionOutput {
+			t.Errorf("expected storage to normalize ActionBuildOutput to ActionOutput and package 'import/pkg'")
+		}
+	})
 
 	t.Run("OrderedKeys", func(t *testing.T) {
 		keys := ts.OrderedKeys()
@@ -405,23 +521,16 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 }
 
-// captureStdout is a test helper that intercepts os.Stdout and returns its content as a string.
+// captureStdout is a test helper that redirects defaultRenderer output and returns its content as a string.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
-	os.Stdout = w
-	fn()
-	w.Close()
-	os.Stdout = old
 	var sb strings.Builder
-	_, err = io.Copy(&sb, r)
-	if err != nil {
-		t.Fatalf("failed to copy output: %v", err)
-	}
+	old := defaultRenderer.w
+	defaultRenderer.w = &sb
+	defer func() {
+		defaultRenderer.w = old
+	}()
+	fn()
 	return sb.String()
 }
 
@@ -554,5 +663,72 @@ func TestProcessEvents(t *testing.T) {
 	got := sb.String()
 	if !strings.Contains(got, "my/pkg.TestFoo") {
 		t.Errorf("expected test name in output, got: %s", got)
+	}
+}
+
+func TestRenderer_EventTextColor(t *testing.T) {
+	r := NewRenderer(nil)
+
+	t.Run("with OutputType", func(t *testing.T) {
+		errHeaderEv := Event{OutputType: OutputTypeError, Action: ActionOutput}
+		fn := r.eventTextColor(errHeaderEv, StatusFail, true, failColor)
+		if fn == nil {
+			t.Fatal("expected non-nil color function")
+		}
+
+		errContEv := Event{OutputType: OutputTypeErrorContinue, Action: ActionOutput}
+		fnCont := r.eventTextColor(errContEv, StatusFail, true, failColor)
+		if fnCont == nil {
+			t.Fatal("expected non-nil color function")
+		}
+
+		plainEv := Event{OutputType: OutputTypeBlank, Action: ActionOutput}
+		fnPlain := r.eventTextColor(plainEv, StatusFail, true, failColor)
+		if fnPlain == nil {
+			t.Fatal("expected non-nil color function")
+		}
+
+		skipEv := Event{OutputType: OutputTypeBlank, Action: ActionOutput}
+		fnSkip := r.eventTextColor(skipEv, StatusSkip, true, skipColor)
+		if fnSkip == nil {
+			t.Fatal("expected non-nil color function")
+		}
+	})
+
+	t.Run("without OutputType (fallback)", func(t *testing.T) {
+		plainEv := Event{OutputType: OutputTypeBlank, Action: ActionOutput}
+		fn := r.eventTextColor(plainEv, StatusFail, false, failColor)
+		if fn == nil {
+			t.Fatal("expected fallback color function")
+		}
+	})
+}
+
+func TestRenderer_PrintDetail_OutputTypes(t *testing.T) {
+	var sb strings.Builder
+	r := NewRenderer(&sb)
+
+	events := Events{
+		{Action: ActionRun, Package: "pkg", Test: "TestFail", Time: time.Now()},
+		{Action: ActionOutput, Package: "pkg", Test: "TestFail", Output: "debug log\n", OutputType: OutputTypeBlank, Time: time.Now()},
+		{Action: ActionOutput, Package: "pkg", Test: "TestFail", Output: "    fail_test.go:10: error message\n", OutputType: OutputTypeError, Time: time.Now()},
+		{Action: ActionOutput, Package: "pkg", Test: "TestFail", Output: "        error details continuation\n", OutputType: OutputTypeErrorContinue, Time: time.Now()},
+		{Action: ActionFail, Package: "pkg", Test: "TestFail", Elapsed: 0.05, Time: time.Now()},
+	}
+
+	r.PrintDetail(events, Flags{V: V0})
+	got := sb.String()
+
+	if !strings.Contains(got, "=== FAIL pkg.TestFail") {
+		t.Errorf("expected FAIL header, got: %s", got)
+	}
+	if !strings.Contains(got, "debug log") {
+		t.Errorf("expected debug log in output, got: %s", got)
+	}
+	if !strings.Contains(got, "error message") {
+		t.Errorf("expected error message in output, got: %s", got)
+	}
+	if !strings.Contains(got, "error details continuation") {
+		t.Errorf("expected continuation line in output, got: %s", got)
 	}
 }
