@@ -68,21 +68,25 @@ func TestAction_Methods(t *testing.T) {
 	}
 
 	tests := []struct {
-		action Action
-		status Status
-		want   bool
+		action     Action
+		wantStatus Status
+		wantEnding bool
 	}{
 		{ActionPass, StatusPass, true},
 		{ActionFail, StatusFail, true},
 		{ActionSkip, StatusSkip, true},
 		{ActionBench, StatusBench, true},
-		{ActionPass, StatusFail, false},
-		{ActionRun, StatusPass, false},
+		{ActionBuildFail, StatusBuildFail, true},
+		{ActionRun, StatusNone, false},
+		{ActionOutput, StatusNone, false},
 	}
 
 	for _, tt := range tests {
-		if got := tt.action.IsStatus(tt.status); got != tt.want {
-			t.Errorf("%s.IsStatus(%s) = %v, want %v", tt.action, tt.status, got, tt.want)
+		if got := tt.action.Status(); got != tt.wantStatus {
+			t.Errorf("%s.Status() = %v, want %v", tt.action, got, tt.wantStatus)
+		}
+		if got := tt.action.IsEnding(); got != tt.wantEnding {
+			t.Errorf("%s.IsEnding() = %v, want %v", tt.action, got, tt.wantEnding)
 		}
 	}
 }
@@ -91,23 +95,23 @@ func TestStatus_Methods(t *testing.T) {
 	if StatusPass.String() != "pass" {
 		t.Errorf("expected 'pass', got %s", StatusPass.String())
 	}
+}
 
+func TestEvent_Status(t *testing.T) {
 	tests := []struct {
-		status Status
-		action Action
-		want   bool
+		event Event
+		want  Status
 	}{
-		{StatusPass, ActionPass, true},
-		{StatusFail, ActionFail, true},
-		{StatusSkip, ActionSkip, true},
-		{StatusBench, ActionBench, true},
-		{StatusPass, ActionFail, false},
-		{StatusNone, ActionPass, false},
+		{Event{Action: ActionPass}, StatusPass},
+		{Event{Action: ActionFail}, StatusFail},
+		{Event{Action: ActionFail, FailedBuild: "pkg"}, StatusBuildFail},
+		{Event{Action: ActionBuildFail}, StatusBuildFail},
+		{Event{Action: ActionRun}, StatusNone},
 	}
 
 	for _, tt := range tests {
-		if got := tt.status.IsAction(tt.action); got != tt.want {
-			t.Errorf("%s.IsAction(%s) = %v, want %v", tt.status, tt.action, got, tt.want)
+		if got := tt.event.Status(); got != tt.want {
+			t.Errorf("%+v.Status() = %v, want %v", tt.event, got, tt.want)
 		}
 	}
 }
@@ -121,15 +125,6 @@ func TestStatuses_Methods(t *testing.T) {
 		}
 		if ss.Any(StatusSkip) {
 			t.Error("expected Any(StatusSkip) to be false")
-		}
-	})
-
-	t.Run("HasAction", func(t *testing.T) {
-		if !ss.HasAction(ActionPass) {
-			t.Error("expected HasAction(ActionPass) to be true")
-		}
-		if ss.HasAction(ActionSkip) {
-			t.Error("expected HasAction(ActionSkip) to be false")
 		}
 	})
 
@@ -377,6 +372,37 @@ func TestTestStorage_Methods(t *testing.T) {
 			t.Errorf("expected 4 results, got %d", len(filtered))
 		}
 	})
+
+	t.Run("Filter", func(t *testing.T) {
+		filtered := ts.Filter(func(k Key, _ Events) bool {
+			return k.Test == "test1"
+		})
+		if len(filtered) != 1 {
+			t.Errorf("expected 1 result, got %d", len(filtered))
+		}
+	})
+
+	t.Run("FindByStatus", func(t *testing.T) {
+		pass := ts.FindByStatus(StatusPass)
+		if len(pass) != 2 {
+			t.Errorf("expected 2 pass results, got %d", len(pass))
+		}
+		fail := ts.FindByStatus(StatusFail)
+		if len(fail) != 1 {
+			t.Errorf("expected 1 fail result, got %d", len(fail))
+		}
+		none := ts.FindByStatus(StatusNone)
+		if len(none) != 2 { // pkg_cov and pkg_no have only output
+			t.Errorf("expected 2 none results, got %d", len(none))
+		}
+	})
+
+	t.Run("Stats", func(t *testing.T) {
+		stats := ts.Stats()
+		if stats.Pass != 1 || stats.Fail != 1 || stats.None != 2 {
+			t.Errorf("unexpected stats: %+v", stats)
+		}
+	})
 }
 
 // captureStdout is a test helper that intercepts os.Stdout and returns its content as a string.
@@ -441,4 +467,92 @@ func TestPrintingFunctions(t *testing.T) {
 			t.Errorf("PrintDetail output missing expected content: %q", got)
 		}
 	})
+}
+
+func TestRenderer_DirectWriter(t *testing.T) {
+	ts := make(TestStorage)
+	ts.Append(Event{Package: "pkg", Action: ActionPass, Elapsed: 0.1})
+	ts.Append(Event{Package: "pkg", Test: "Test1", Action: ActionPass, Elapsed: 0.1})
+	ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
+
+	t.Run("PrintShortSummary", func(t *testing.T) {
+		var sb strings.Builder
+		r := NewRenderer(&sb)
+		r.PrintShortSummary(ts, StatusPass)
+		got := sb.String()
+		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") {
+			t.Errorf("PrintShortSummary output missing expected content: %q", got)
+		}
+	})
+
+	t.Run("PrintSummary", func(t *testing.T) {
+		var sb strings.Builder
+		r := NewRenderer(&sb)
+		r.PrintSummary(ts, StatusPass)
+		got := sb.String()
+		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg.Test1") {
+			t.Errorf("PrintSummary output missing expected content: %q", got)
+		}
+	})
+
+	t.Run("PrintCoverage", func(t *testing.T) {
+		var sb strings.Builder
+		r := NewRenderer(&sb)
+		r.PrintCoverage(ts)
+		got := sb.String()
+		if !strings.Contains(got, "COVR") || !strings.Contains(got, "50.0%") {
+			t.Errorf("PrintCoverage output missing expected content: %q", got)
+		}
+	})
+
+	t.Run("PrintDetail", func(t *testing.T) {
+		var sb strings.Builder
+		r := NewRenderer(&sb)
+		events := ts[Key{Package: "pkg", Test: "Test1"}]
+		r.PrintDetail(events, Flags{V: V0})
+		got := sb.String()
+		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") || !strings.Contains(got, "Test1") {
+			t.Errorf("PrintDetail output missing expected content: %q", got)
+		}
+	})
+
+	t.Run("PrintFooter", func(t *testing.T) {
+		var sb strings.Builder
+		r := NewRenderer(&sb)
+		r.PrintFooter(ts, time.Now())
+		got := sb.String()
+		if !strings.Contains(got, "PASS:1") {
+			t.Errorf("PrintFooter output missing expected content: %q", got)
+		}
+	})
+
+	t.Run("PrintHeader", func(t *testing.T) {
+		var sb strings.Builder
+		r := NewRenderer(&sb)
+		r.PrintHeader()
+		got := sb.String()
+		if !strings.Contains(got, "*****") {
+			t.Errorf("PrintHeader output missing expected content: %q", got)
+		}
+	})
+}
+
+func TestProcessEvents(t *testing.T) {
+	input := `{"Time":"2026-08-19T10:00:00Z","Action":"run","Package":"my/pkg","Test":"TestFoo"}
+{"Time":"2026-08-19T10:00:01Z","Action":"pass","Package":"my/pkg","Test":"TestFoo","Elapsed":0.05}
+`
+	var sb strings.Builder
+	r := NewRenderer(&sb)
+	flags := Flags{
+		Results: Statuses{StatusPass},
+		Summary: Statuses{StatusPass},
+	}
+	err := processEvents(strings.NewReader(input), flags, r, false, time.Now())
+	if err != nil {
+		t.Fatalf("processEvents returned error: %v", err)
+	}
+	got := sb.String()
+	if !strings.Contains(got, "my/pkg.TestFoo") {
+		t.Errorf("expected test name in output, got: %s", got)
+	}
 }
