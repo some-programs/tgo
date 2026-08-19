@@ -42,6 +42,9 @@ func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv 
 	log.Println("args", args)
 
 	cmd := exec.CommandContext(ctx, flags.Bin, args...)
+	if flags.Dir != "" {
+		cmd.Dir = flags.Dir
+	}
 	cmd.Stderr = os.Stderr
 
 	stdout, err := cmd.StdoutPipe()

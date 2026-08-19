@@ -7,9 +7,11 @@ import (
 )
 
 func TestRun_Pass(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
@@ -20,9 +22,11 @@ func TestRun_Pass(t *testing.T) {
 }
 
 func TestRun_Fail(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
@@ -33,9 +37,11 @@ func TestRun_Fail(t *testing.T) {
 }
 
 func TestRun_BuildFail(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusFail, StatusNone, StatusBuildFail},
 		Summary: Statuses{StatusFail, StatusNone, StatusBuildFail},
 	}
@@ -46,9 +52,11 @@ func TestRun_BuildFail(t *testing.T) {
 }
 
 func TestRun_Skip(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}
@@ -59,9 +67,11 @@ func TestRun_Skip(t *testing.T) {
 }
 
 func TestRun_Bench(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusBench},
 		Summary: Statuses{StatusBench},
 	}
@@ -72,9 +82,11 @@ func TestRun_Bench(t *testing.T) {
 }
 
 func TestRun_Output(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusPass},
 		Summary: Statuses{StatusPass},
 		V:       V4,
@@ -86,9 +98,11 @@ func TestRun_Output(t *testing.T) {
 }
 
 func TestRun_Crash(t *testing.T) {
-	setupTestDir(t)
+	t.Parallel()
+	dir := setupTestDir(t)
 	flags := Flags{
 		Bin:     "go",
+		Dir:     dir,
 		Results: Statuses{StatusFail, StatusNone},
 		Summary: Statuses{StatusFail, StatusNone},
 	}

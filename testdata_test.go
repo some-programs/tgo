@@ -122,8 +122,7 @@ func TestErrors(t *testing.T) {
 	},
 }
 
-// setupTestDir creates a temporary directory populated with testDataFS test files
-// and changes the working directory to it for the duration of the test.
+// setupTestDir creates a temporary directory populated with testDataFS test files.
 func setupTestDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -136,6 +135,5 @@ func setupTestDir(t *testing.T) string {
 			t.Fatalf("failed to write file %s: %v", name, err)
 		}
 	}
-	t.Chdir(dir)
 	return dir
 }

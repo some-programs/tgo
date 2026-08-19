@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestFlags_Register(t *testing.T) {
+	t.Parallel()
 	var f Flags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	f.Register(fs)
@@ -25,6 +27,7 @@ func TestFlags_Register(t *testing.T) {
 }
 
 func TestFlags_PrintHelp(t *testing.T) {
+	t.Parallel()
 	var f Flags
 	var sb strings.Builder
 	f.PrintHelp(&sb)
@@ -34,6 +37,7 @@ func TestFlags_PrintHelp(t *testing.T) {
 }
 
 func TestFlags_PrintConfig(t *testing.T) {
+	t.Parallel()
 	var f Flags
 	f.Results = Statuses{StatusPass}
 	var sb strings.Builder
@@ -44,7 +48,10 @@ func TestFlags_PrintConfig(t *testing.T) {
 }
 
 func TestFlags_Setup(t *testing.T) {
+	t.Parallel()
+
 	t.Run("All", func(t *testing.T) {
+		t.Parallel()
 		f := Flags{All: true}
 		f.Setup(nil)
 		if len(f.Results) != len(AllStatuses) {
@@ -53,6 +60,7 @@ func TestFlags_Setup(t *testing.T) {
 	})
 
 	t.Run("V2", func(t *testing.T) {
+		t.Parallel()
 		f := Flags{}
 		f.Setup([]string{"-v"})
 		if f.V != V2 {
@@ -62,6 +70,7 @@ func TestFlags_Setup(t *testing.T) {
 }
 
 func TestAction_Methods(t *testing.T) {
+	t.Parallel()
 	if ActionPass.String() != "pass" {
 		t.Errorf("expected 'pass', got %s", ActionPass.String())
 	}
@@ -91,12 +100,14 @@ func TestAction_Methods(t *testing.T) {
 }
 
 func TestStatus_Methods(t *testing.T) {
+	t.Parallel()
 	if StatusPass.String() != "pass" {
 		t.Errorf("expected 'pass', got %s", StatusPass.String())
 	}
 }
 
 func TestOutputType_Methods(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		outputType OutputType
 		wantStr    string
@@ -152,6 +163,7 @@ func TestOutputType_Methods(t *testing.T) {
 }
 
 func TestEvent_Status(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		event Event
 		want  Status
@@ -171,9 +183,11 @@ func TestEvent_Status(t *testing.T) {
 }
 
 func TestStatuses_Methods(t *testing.T) {
+	t.Parallel()
 	ss := Statuses{StatusPass, StatusFail}
 
 	t.Run("Any", func(t *testing.T) {
+		t.Parallel()
 		if !ss.Any(StatusPass) {
 			t.Error("expected Any(StatusPass) to be true")
 		}
@@ -183,12 +197,14 @@ func TestStatuses_Methods(t *testing.T) {
 	})
 
 	t.Run("String", func(t *testing.T) {
+		t.Parallel()
 		if ss.String() != "pass,fail" {
 			t.Errorf("expected 'pass,fail', got %s", ss.String())
 		}
 	})
 
 	t.Run("Set", func(t *testing.T) {
+		t.Parallel()
 		var sss Statuses
 		if err := sss.Set("pass,skip"); err != nil {
 			t.Fatalf("Set failed: %v", err)
@@ -218,6 +234,7 @@ func TestStatuses_Methods(t *testing.T) {
 }
 
 func TestEvent_Key(t *testing.T) {
+	t.Parallel()
 	e := Event{Package: "pkg", Test: "test"}
 	if e.Key().Package != "pkg" || e.Key().Test != "test" {
 		t.Errorf("unexpected key: %v", e.Key())
@@ -235,6 +252,7 @@ func TestEvent_Key(t *testing.T) {
 }
 
 func TestEvent_JSON(t *testing.T) {
+	t.Parallel()
 	raw := `{"Time":"2026-08-19T10:00:00Z","Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"=== RUN TestFoo\n","OutputType":"frame"}`
 	var e Event
 	if err := json.Unmarshal([]byte(raw), &e); err != nil {
@@ -261,6 +279,7 @@ func TestEvent_JSON(t *testing.T) {
 }
 
 func TestKey_String(t *testing.T) {
+	t.Parallel()
 	k := Key{Package: "pkg", Test: "test"}
 	if k.String() != "pkg.test" {
 		t.Errorf("expected 'pkg.test', got %s", k.String())
@@ -273,6 +292,7 @@ func TestKey_String(t *testing.T) {
 }
 
 func TestEvents_Methods(t *testing.T) {
+	t.Parallel()
 	es := Events{
 		{Action: ActionRun, Time: time.Now()},
 		{Action: ActionOutput, Output: "foo\n"},
@@ -280,6 +300,7 @@ func TestEvents_Methods(t *testing.T) {
 	}
 
 	t.Run("Clone", func(t *testing.T) {
+		t.Parallel()
 		cloned := es.Clone()
 		if len(cloned) != len(es) {
 			t.Error("clone length mismatch")
@@ -290,6 +311,7 @@ func TestEvents_Methods(t *testing.T) {
 	})
 
 	t.Run("Status", func(t *testing.T) {
+		t.Parallel()
 		if es.Status() != StatusPass {
 			t.Errorf("expected StatusPass, got %s", es.Status())
 		}
@@ -311,6 +333,7 @@ func TestEvents_Methods(t *testing.T) {
 	})
 
 	t.Run("FindFirstByAction", func(t *testing.T) {
+		t.Parallel()
 		e := es.FindFirstByAction(ActionPass)
 		if e == nil || e.Action != ActionPass {
 			t.Error("failed to find ActionPass")
@@ -321,6 +344,7 @@ func TestEvents_Methods(t *testing.T) {
 	})
 
 	t.Run("SortByTime", func(t *testing.T) {
+		t.Parallel()
 		now := time.Now()
 		es2 := Events{
 			{Time: now.Add(time.Second)},
@@ -333,6 +357,7 @@ func TestEvents_Methods(t *testing.T) {
 	})
 
 	t.Run("Compact", func(t *testing.T) {
+		t.Parallel()
 		es3 := Events{
 			{Action: ActionRun, Test: "test"},
 			{Action: ActionOutput, Test: "test", Output: "=== RUN   test\n"},
@@ -367,6 +392,7 @@ func TestEvents_Methods(t *testing.T) {
 	})
 
 	t.Run("IsPackageWithoutTest", func(t *testing.T) {
+		t.Parallel()
 		es4 := Events{
 			{Action: ActionOutput, Package: "pkg", Output: "ok  	pkg [no test files]\n"},
 		}
@@ -376,6 +402,7 @@ func TestEvents_Methods(t *testing.T) {
 	})
 
 	t.Run("FindCoverage", func(t *testing.T) {
+		t.Parallel()
 		es5 := Events{
 			{Package: "pkg", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"},
 		}
@@ -386,12 +413,18 @@ func TestEvents_Methods(t *testing.T) {
 }
 
 func TestTestStorage_Methods(t *testing.T) {
-	ts := make(TestStorage)
-	ts.Append(Event{Package: "pkg", Test: "test1", Action: ActionPass})
-	ts.Append(Event{Package: "pkg", Test: "test2", Action: ActionFail})
-	ts.Append(Event{Package: "pkg", Action: ActionPass})
+	t.Parallel()
+
+	newTS := func() TestStorage {
+		ts := make(TestStorage)
+		ts.Append(Event{Package: "pkg", Test: "test1", Action: ActionPass})
+		ts.Append(Event{Package: "pkg", Test: "test2", Action: ActionFail})
+		ts.Append(Event{Package: "pkg", Action: ActionPass})
+		return ts
+	}
 
 	t.Run("Append_FailedBuild", func(t *testing.T) {
+		t.Parallel()
 		storage := make(TestStorage)
 		storage.Append(Event{FailedBuild: "build/fail/pkg", Action: ActionFail})
 		if _, ok := storage[Key{Package: "build/fail/pkg"}]; !ok {
@@ -400,6 +433,7 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 
 	t.Run("Append_ImportPath", func(t *testing.T) {
+		t.Parallel()
 		storage := make(TestStorage)
 		storage.Append(Event{ImportPath: "import/pkg", Action: ActionBuildOutput})
 		events, ok := storage[Key{Package: "import/pkg"}]
@@ -409,71 +443,82 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 
 	t.Run("OrderedKeys", func(t *testing.T) {
-		keys := ts.OrderedKeys()
+		t.Parallel()
+		keys := newTS().OrderedKeys()
 		if len(keys) != 3 {
 			t.Fatalf("expected 3 keys, got %d", len(keys))
 		}
 	})
 
 	t.Run("FilterPackageResults", func(t *testing.T) {
-		filtered := ts.FilterPackageResults()
+		t.Parallel()
+		filtered := newTS().FilterPackageResults()
 		if len(filtered) != 2 {
 			t.Error("expected 2 test results")
 		}
 	})
 
 	t.Run("FindPackageResults", func(t *testing.T) {
-		filtered := ts.FindPackageResults()
+		t.Parallel()
+		filtered := newTS().FindPackageResults()
 		if len(filtered) != 1 {
 			t.Error("expected 1 package result")
 		}
 	})
 
 	t.Run("CountTests", func(t *testing.T) {
-		if ts.CountTests() != 2 {
-			t.Errorf("expected 2 tests, got %d", ts.CountTests())
+		t.Parallel()
+		if newTS().CountTests() != 2 {
+			t.Errorf("expected 2 tests, got %d", newTS().CountTests())
 		}
 	})
 
 	t.Run("Union", func(t *testing.T) {
+		t.Parallel()
 		ts2 := make(TestStorage)
 		ts2.Append(Event{Package: "pkg2", Action: ActionPass})
-		union := ts.Union(ts2)
+		union := newTS().Union(ts2)
 		if len(union) != 4 {
 			t.Errorf("union failed, expected 4 results, got %d", len(union))
 		}
 	})
 
 	t.Run("FilterKeys", func(t *testing.T) {
+		t.Parallel()
 		exclude := map[Key]bool{{Package: "pkg", Test: "test1"}: true}
-		filtered := ts.FilterKeys(exclude)
+		filtered := newTS().FilterKeys(exclude)
 		if len(filtered) != 2 {
 			t.Error("FilterKeys failed")
 		}
 	})
 
 	t.Run("FindPackageTests", func(t *testing.T) {
-		pkgTests := ts.FindPackageTests("pkg")
+		t.Parallel()
+		pkgTests := newTS().FindPackageTests("pkg")
 		if len(pkgTests) != 3 {
 			t.Error("FindPackageTests failed")
 		}
 	})
 
 	t.Run("FindByAction", func(t *testing.T) {
-		failed := ts.FindByAction(ActionFail)
+		t.Parallel()
+		failed := newTS().FindByAction(ActionFail)
 		if len(failed) != 1 {
 			t.Error("FindByAction failed")
 		}
 	})
 
 	t.Run("FilterAction", func(t *testing.T) {
-		noFail := ts.FilterAction(ActionFail)
+		t.Parallel()
+		noFail := newTS().FilterAction(ActionFail)
 		if len(noFail) != 2 {
 			t.Error("FilterAction failed")
 		}
 	})
 
 	t.Run("WithCoverage", func(t *testing.T) {
+		t.Parallel()
+		ts := newTS()
 		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 10.0% of statements\n"})
 		cov := ts.WithCoverage()
 		if len(cov) != 1 {
@@ -482,6 +527,9 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 
 	t.Run("FilterNotests", func(t *testing.T) {
+		t.Parallel()
+		ts := newTS()
+		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 10.0% of statements\n"})
 		ts.Append(Event{Package: "pkg_no", Action: ActionOutput, Output: "ok  	pkg_no [no test files]\n"})
 		filtered := ts.FilterNotests()
 		if len(filtered) != 4 {
@@ -490,7 +538,8 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 
 	t.Run("Filter", func(t *testing.T) {
-		filtered := ts.Filter(func(k Key, _ Events) bool {
+		t.Parallel()
+		filtered := newTS().Filter(func(k Key, _ Events) bool {
 			return k.Test == "test1"
 		})
 		if len(filtered) != 1 {
@@ -499,6 +548,11 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 
 	t.Run("FindByStatus", func(t *testing.T) {
+		t.Parallel()
+		ts := newTS()
+		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 10.0% of statements\n"})
+		ts.Append(Event{Package: "pkg_no", Action: ActionOutput, Output: "ok  	pkg_no [no test files]\n"})
+
 		pass := ts.FindByStatus(StatusPass)
 		if len(pass) != 2 {
 			t.Errorf("expected 2 pass results, got %d", len(pass))
@@ -514,6 +568,11 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 
 	t.Run("Stats", func(t *testing.T) {
+		t.Parallel()
+		ts := newTS()
+		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 10.0% of statements\n"})
+		ts.Append(Event{Package: "pkg_no", Action: ActionOutput, Output: "ok  	pkg_no [no test files]\n"})
+
 		stats := ts.Stats()
 		if stats.Pass != 1 || stats.Fail != 1 || stats.None != 2 {
 			t.Errorf("unexpected stats: %+v", stats)
@@ -521,9 +580,13 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 }
 
+var defaultRendererMu sync.Mutex
+
 // captureStdout is a test helper that redirects defaultRenderer output and returns its content as a string.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
+	defaultRendererMu.Lock()
+	defer defaultRendererMu.Unlock()
 	var sb strings.Builder
 	old := defaultRenderer.w
 	defaultRenderer.w = &sb
@@ -535,14 +598,19 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestPrintingFunctions(t *testing.T) {
-	ts := make(TestStorage)
-	ts.Append(Event{Package: "pkg", Action: ActionPass, Elapsed: 0.1})
-	ts.Append(Event{Package: "pkg", Test: "Test1", Action: ActionPass, Elapsed: 0.1})
-	ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
+	t.Parallel()
+	newTS := func() TestStorage {
+		ts := make(TestStorage)
+		ts.Append(Event{Package: "pkg", Action: ActionPass, Elapsed: 0.1})
+		ts.Append(Event{Package: "pkg", Test: "Test1", Action: ActionPass, Elapsed: 0.1})
+		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
+		return ts
+	}
 
 	t.Run("PrintShortSummary", func(t *testing.T) {
+		t.Parallel()
 		got := captureStdout(t, func() {
-			ts.PrintShortSummary(StatusPass)
+			newTS().PrintShortSummary(StatusPass)
 		})
 		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") {
 			t.Errorf("PrintShortSummary output missing expected content: %q", got)
@@ -550,8 +618,9 @@ func TestPrintingFunctions(t *testing.T) {
 	})
 
 	t.Run("PrintSummary", func(t *testing.T) {
+		t.Parallel()
 		got := captureStdout(t, func() {
-			ts.PrintSummary(StatusPass)
+			newTS().PrintSummary(StatusPass)
 		})
 		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg.Test1") {
 			t.Errorf("PrintSummary output missing expected content: %q", got)
@@ -559,8 +628,9 @@ func TestPrintingFunctions(t *testing.T) {
 	})
 
 	t.Run("PrintCoverage", func(t *testing.T) {
+		t.Parallel()
 		got := captureStdout(t, func() {
-			ts.PrintCoverage()
+			newTS().PrintCoverage()
 		})
 		if !strings.Contains(got, "COVR") || !strings.Contains(got, "50.0%") {
 			t.Errorf("PrintCoverage output missing expected content: %q", got)
@@ -568,7 +638,8 @@ func TestPrintingFunctions(t *testing.T) {
 	})
 
 	t.Run("PrintDetail", func(t *testing.T) {
-		events := ts[Key{Package: "pkg", Test: "Test1"}]
+		t.Parallel()
+		events := newTS()[Key{Package: "pkg", Test: "Test1"}]
 		got := captureStdout(t, func() {
 			events.PrintDetail(Flags{V: V0})
 		})
@@ -579,15 +650,20 @@ func TestPrintingFunctions(t *testing.T) {
 }
 
 func TestRenderer_DirectWriter(t *testing.T) {
-	ts := make(TestStorage)
-	ts.Append(Event{Package: "pkg", Action: ActionPass, Elapsed: 0.1})
-	ts.Append(Event{Package: "pkg", Test: "Test1", Action: ActionPass, Elapsed: 0.1})
-	ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
+	t.Parallel()
+	newTS := func() TestStorage {
+		ts := make(TestStorage)
+		ts.Append(Event{Package: "pkg", Action: ActionPass, Elapsed: 0.1})
+		ts.Append(Event{Package: "pkg", Test: "Test1", Action: ActionPass, Elapsed: 0.1})
+		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
+		return ts
+	}
 
 	t.Run("PrintShortSummary", func(t *testing.T) {
+		t.Parallel()
 		var sb strings.Builder
 		r := NewRenderer(&sb)
-		r.PrintShortSummary(ts, StatusPass)
+		r.PrintShortSummary(newTS(), StatusPass)
 		got := sb.String()
 		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") {
 			t.Errorf("PrintShortSummary output missing expected content: %q", got)
@@ -595,9 +671,10 @@ func TestRenderer_DirectWriter(t *testing.T) {
 	})
 
 	t.Run("PrintSummary", func(t *testing.T) {
+		t.Parallel()
 		var sb strings.Builder
 		r := NewRenderer(&sb)
-		r.PrintSummary(ts, StatusPass)
+		r.PrintSummary(newTS(), StatusPass)
 		got := sb.String()
 		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg.Test1") {
 			t.Errorf("PrintSummary output missing expected content: %q", got)
@@ -605,9 +682,10 @@ func TestRenderer_DirectWriter(t *testing.T) {
 	})
 
 	t.Run("PrintCoverage", func(t *testing.T) {
+		t.Parallel()
 		var sb strings.Builder
 		r := NewRenderer(&sb)
-		r.PrintCoverage(ts)
+		r.PrintCoverage(newTS())
 		got := sb.String()
 		if !strings.Contains(got, "COVR") || !strings.Contains(got, "50.0%") {
 			t.Errorf("PrintCoverage output missing expected content: %q", got)
@@ -615,9 +693,10 @@ func TestRenderer_DirectWriter(t *testing.T) {
 	})
 
 	t.Run("PrintDetail", func(t *testing.T) {
+		t.Parallel()
 		var sb strings.Builder
 		r := NewRenderer(&sb)
-		events := ts[Key{Package: "pkg", Test: "Test1"}]
+		events := newTS()[Key{Package: "pkg", Test: "Test1"}]
 		r.PrintDetail(events, Flags{V: V0})
 		got := sb.String()
 		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") || !strings.Contains(got, "Test1") {
@@ -626,9 +705,10 @@ func TestRenderer_DirectWriter(t *testing.T) {
 	})
 
 	t.Run("PrintFooter", func(t *testing.T) {
+		t.Parallel()
 		var sb strings.Builder
 		r := NewRenderer(&sb)
-		r.PrintFooter(ts, time.Now())
+		r.PrintFooter(newTS(), time.Now())
 		got := sb.String()
 		if !strings.Contains(got, "PASS:1") {
 			t.Errorf("PrintFooter output missing expected content: %q", got)
@@ -636,6 +716,7 @@ func TestRenderer_DirectWriter(t *testing.T) {
 	})
 
 	t.Run("PrintHeader", func(t *testing.T) {
+		t.Parallel()
 		var sb strings.Builder
 		r := NewRenderer(&sb)
 		r.PrintHeader()
@@ -647,6 +728,7 @@ func TestRenderer_DirectWriter(t *testing.T) {
 }
 
 func TestProcessEvents(t *testing.T) {
+	t.Parallel()
 	input := `{"Time":"2026-08-19T10:00:00Z","Action":"run","Package":"my/pkg","Test":"TestFoo"}
 {"Time":"2026-08-19T10:00:01Z","Action":"pass","Package":"my/pkg","Test":"TestFoo","Elapsed":0.05}
 `
@@ -667,9 +749,11 @@ func TestProcessEvents(t *testing.T) {
 }
 
 func TestRenderer_EventTextColor(t *testing.T) {
+	t.Parallel()
 	r := NewRenderer(nil)
 
 	t.Run("with OutputType", func(t *testing.T) {
+		t.Parallel()
 		errHeaderEv := Event{OutputType: OutputTypeError, Action: ActionOutput}
 		fn := r.eventTextColor(errHeaderEv, StatusFail, true, failColor)
 		if fn == nil {
@@ -696,6 +780,7 @@ func TestRenderer_EventTextColor(t *testing.T) {
 	})
 
 	t.Run("without OutputType (fallback)", func(t *testing.T) {
+		t.Parallel()
 		plainEv := Event{OutputType: OutputTypeBlank, Action: ActionOutput}
 		fn := r.eventTextColor(plainEv, StatusFail, false, failColor)
 		if fn == nil {
@@ -705,6 +790,7 @@ func TestRenderer_EventTextColor(t *testing.T) {
 }
 
 func TestRenderer_PrintDetail_OutputTypes(t *testing.T) {
+	t.Parallel()
 	var sb strings.Builder
 	r := NewRenderer(&sb)
 

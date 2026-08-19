@@ -40,6 +40,7 @@ func normalizeOutput(s string) string {
 }
 
 func TestFullProgram(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		args       []string
@@ -237,11 +238,14 @@ BUILD FAIL testcases/buildfail [testcases/buildfail.test]
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			setupTestDir(t)
+			t.Parallel()
+			dir := setupTestDir(t)
+			flags := tt.flags
+			flags.Dir = dir
 			var sb strings.Builder
 			renderer := NewRenderer(&sb)
 
-			err := runWithRenderer(context.Background(), tt.flags, renderer, tt.args)
+			err := runWithRenderer(context.Background(), flags, renderer, tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("runWithRenderer() error = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -256,6 +260,7 @@ BUILD FAIL testcases/buildfail [testcases/buildfail.test]
 }
 
 func TestFullProgram_CLI(t *testing.T) {
+	t.Parallel()
 	rootDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
@@ -346,6 +351,7 @@ func TestFullProgram_CLI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			dir := setupTestDir(t)
 
 			cmd := exec.Command(binPath, tt.args...)

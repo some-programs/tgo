@@ -29,6 +29,7 @@ type Flags struct {
 	HideEmptyResults Statuses
 	Summary          Statuses
 	Bin              string
+	Dir              string
 	All              bool
 	PrintConfig      bool
 }
