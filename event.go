@@ -177,15 +177,28 @@ func (e Event) IsErrorContinue() bool {
 func (t Event) Key() Key {
 	pkg := t.Package
 	if pkg == "" {
-		pkg = t.ImportPath
+		pkg = testedPackage(t.ImportPath)
 	}
 	if pkg == "" {
-		pkg = t.FailedBuild
+		pkg = testedPackage(t.FailedBuild)
 	}
 	return Key{
 		Package: pkg,
 		Test:    t.Test,
 	}
+}
+
+// testedPackage maps the import path of a test variant, such as
+// "pkg [pkg.test]" or "pkg_test [pkg.test]", to the package under test, so
+// that its build output is stored with the package's own fail event.
+// Other import paths are returned unchanged.
+func testedPackage(importPath string) string {
+	if _, variant, ok := strings.Cut(importPath, " ["); ok {
+		if pkg, ok := strings.CutSuffix(variant, ".test]"); ok {
+			return pkg
+		}
+	}
+	return importPath
 }
 
 // Status returns the Status of the Event.
@@ -204,13 +217,25 @@ func (es Events) Clone() Events {
 	return events
 }
 
+// Status returns the overall status of the events. A test that ran more than
+// once (go test -count=N) has several terminal events; a failure in any run
+// takes precedence, otherwise the first terminal status is used.
 func (es Events) Status() Status {
+	status := StatusNone
 	for _, e := range es {
-		if s := e.Status(); s != StatusNone {
+		switch s := e.Status(); s {
+		case StatusBuildFail:
 			return s
+		case StatusFail:
+			status = s
+		case StatusNone:
+		default:
+			if status == StatusNone {
+				status = s
+			}
 		}
 	}
-	return StatusNone
+	return status
 }
 
 func (es Events) FindFirstByAction(actions ...Action) *Event {

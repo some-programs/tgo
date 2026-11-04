@@ -86,8 +86,20 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 	w := renderer.out()
 
 	tests := make(TestStorage)
-	printed := make(map[Key]bool)
+	// printed holds the status each key was last printed with. A key is
+	// printed again if a later run (go test -count=N) changes its status.
+	printed := make(map[Key]Status)
+	// runningBench holds the most recently started benchmark per package.
+	runningBench := make(map[string]string)
 	scanner := bufio.NewScanner(r)
+
+	printIfChanged := func(key Key) {
+		status := tests[key].Status()
+		if status != StatusNone && printed[key] != status && flags.Results.Any(status) {
+			renderer.PrintDetail(tests[key], flags)
+			printed[key] = status
+		}
+	}
 
 	renderer.PrintHeader()
 
@@ -100,21 +112,32 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 		}
 		tests.Append(e)
 		key := e.Key()
-		if !printed[key] && e.Status() != StatusNone && flags.Results.Any(e.Status()) {
-			renderer.PrintDetail(tests[key], flags)
-			printed[key] = true
+		if e.Action == ActionRun && strings.HasPrefix(e.Test, "Benchmark") {
+			runningBench[key.Package] = e.Test
 		}
+		if e.Status() == StatusNone {
+			continue
+		}
+		if e.Test == "" {
+			for _, k := range tests.FinishBenchmarks(e, runningBench[key.Package]) {
+				printIfChanged(k)
+			}
+		}
+		printIfChanged(key)
 	}
 
 	if len(tests) > 0 {
 		// Print any non-finished tests if requested
 		if flags.Results.Any(StatusNone) {
 			noneTests := tests.
-				FilterKeys(printed).
+				Filter(func(k Key, _ Events) bool {
+					_, ok := printed[k]
+					return !ok
+				}).
 				FindByStatus(StatusNone)
 			for _, key := range noneTests.OrderedKeys() {
 				renderer.PrintDetail(tests[key], flags)
-				printed[key] = true
+				printed[key] = StatusNone
 			}
 		}
 

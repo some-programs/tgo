@@ -3,6 +3,7 @@ package main
 import (
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/maruel/natural"
 )
@@ -12,38 +13,39 @@ type TestStorage map[Key]Events
 
 // OrderedKeys returns sorted keys for stable presentation order.
 func (ts TestStorage) OrderedKeys() []Key {
-	var tks []Key
-	for k := range ts {
-		tks = append(tks, k)
-	}
-	slices.SortStableFunc(tks, func(a, b Key) int {
-		if a.Package == b.Package && (a.Test == "" || b.Test == "") {
-			if len(a.Test) != len(b.Test) {
-				if len(a.Test) > len(b.Test) {
-					return -1
-				}
-				return 1
-			}
-		}
-		if natural.Less(a.String(), b.String()) {
-			return -1
-		}
-		if natural.Less(b.String(), a.String()) {
-			return 1
-		}
-		return 0
-	})
+	return slices.SortedFunc(maps.Keys(ts), compareKeys)
+}
 
-	return tks
+// compareKeys orders keys by package, and within a package puts the tests
+// first and the package-level key last.
+func compareKeys(a, b Key) int {
+	if a.Package != b.Package {
+		return compareNatural(a.Package, b.Package)
+	}
+	switch {
+	case a.Test == b.Test:
+		return 0
+	case a.Test == "":
+		return 1
+	case b.Test == "":
+		return -1
+	}
+	return compareNatural(a.Test, b.Test)
+}
+
+// compareNatural compares strings in natural order, falling back to byte
+// order for strings that are naturally equal, such as "a01" and "a1".
+func compareNatural(a, b string) int {
+	if c := natural.Compare(a, b); c != 0 {
+		return c
+	}
+	return strings.Compare(a, b)
 }
 
 // Append adds an event into the storage.
 func (ts TestStorage) Append(e Event) {
-	if e.Package == "" && e.ImportPath != "" {
-		e.Package = e.ImportPath
-	}
-	if e.Package == "" && e.FailedBuild != "" {
-		e.Package = e.FailedBuild
+	if e.Package == "" {
+		e.Package = e.Key().Package
 	}
 	if e.Action == ActionBuildOutput {
 		e.Action = ActionOutput
@@ -52,6 +54,41 @@ func (ts TestStorage) Append(e Event) {
 	events := ts[key]
 	events = append(events, e)
 	ts[key] = events
+}
+
+// FinishBenchmarks records completed benchmarks of a package once the
+// package-level terminal event pkg has been seen, and returns their keys in
+// display order. go test -json emits no terminal event for a benchmark that
+// passes, so each benchmark without one gets a synthetic bench event.
+//
+// running is the most recently started benchmark of the package. If the
+// package did not pass and running is unfinished, it and its parent
+// benchmarks are assumed to have crashed and keep status none.
+func (ts TestStorage) FinishBenchmarks(pkg Event, running string) []Key {
+	pkgName := pkg.Key().Package
+	crashed := pkg.Status() != StatusPass && running != "" &&
+		ts[Key{Package: pkgName, Test: running}].Status() == StatusNone
+
+	var keys []Key
+	for key, events := range ts {
+		if key.Package != pkgName ||
+			!strings.HasPrefix(key.Test, "Benchmark") ||
+			events.Status() != StatusNone {
+			continue
+		}
+		if crashed && (key.Test == running || strings.HasPrefix(running, key.Test+"/")) {
+			continue
+		}
+		ts[key] = append(events, Event{
+			Time:    pkg.Time,
+			Action:  ActionBench,
+			Package: key.Package,
+			Test:    key.Test,
+		})
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, compareKeys)
+	return keys
 }
 
 // Union merges multiple TestStorage instances.

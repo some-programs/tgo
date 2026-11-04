@@ -120,6 +120,66 @@ func TestErrors(t *testing.T) {
 }
 `),
 	},
+	"flaky/flaky_test.go": {
+		Data: []byte(`package flaky
+
+import "testing"
+
+var runs int
+
+// TestFlaky passes on its first run and fails on its second (-count=2).
+func TestFlaky(t *testing.T) {
+	runs++
+	if runs == 2 {
+		t.Fatal("second run fails")
+	}
+}
+`),
+	},
+	"benchfail/benchfail_test.go": {
+		Data: []byte(`package benchfail
+
+import "testing"
+
+func BenchmarkOK(b *testing.B) {
+	for b.Loop() {
+	}
+}
+
+func BenchmarkZFail(b *testing.B) {
+	b.Fatal("boom")
+}
+`),
+	},
+	"benchcrash/benchcrash_test.go": {
+		Data: []byte(`package benchcrash
+
+import "testing"
+
+func BenchmarkOK(b *testing.B) {
+	for b.Loop() {
+	}
+}
+
+func BenchmarkZCrash(b *testing.B) {
+	panic("crash")
+}
+`),
+	},
+	"xtestfail/xtestfail.go": {
+		Data: []byte(`package xtestfail
+`),
+	},
+	"xtestfail/xtestfail_test.go": {
+		Data: []byte(`package xtestfail_test
+
+import "testing"
+
+func TestX(t *testing.T) {
+	undefined()
+}
+`),
+	},
 	"mixed/mixed_test.go": {
 		Data: []byte(`package mixed
 

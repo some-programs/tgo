@@ -186,17 +186,104 @@ func TestFullProgram(t *testing.T) {
 			wantErr: true,
 			wantOutput: `
 *****
-=== BUILD FAIL testcases/buildfail [testcases/buildfail.test]
+=== BUILD FAIL testcases/buildfail
 
 # testcases/buildfail [testcases/buildfail.test]
 buildfail/buildfail_test.go:6:2: undefined: undefined
 
-=== BUILD FAIL testcases/buildfail
 ════════════ BUILD FAIL ════════════
 BUILD FAIL testcases/buildfail
-BUILD FAIL testcases/buildfail [testcases/buildfail.test]
 
-══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:2 | NONE:0 | SKIP:0 | 0ms  ══════
+══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:1 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name: "Flaky_Count2",
+			args: []string{"-count=2", "./flaky"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{StatusPass, StatusFail, StatusNone},
+				Summary: Statuses{StatusPass, StatusFail, StatusNone},
+			},
+			wantErr: true,
+			wantOutput: `
+*****
+=== PASS testcases/flaky.TestFlaky
+=== FAIL testcases/flaky.TestFlaky
+
+    flaky_test.go:11: second run fails
+
+=== FAIL testcases/flaky
+════════════ FAIL ════════════
+  FAIL testcases/flaky.TestFlaky
+  FAIL testcases/flaky
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name: "Bench_Fail",
+			args: []string{"-bench", ".", "./benchfail"},
+			// Details are not shown: they include the CPU model.
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{},
+				Summary: AllStatuses,
+			},
+			wantErr: true,
+			wantOutput: `
+*****
+════════════ BENCH ════════════
+ BENCH testcases/benchfail.BenchmarkOK
+════════════ FAIL ════════════
+  FAIL testcases/benchfail.BenchmarkZFail
+  FAIL testcases/benchfail
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name: "Bench_Crash",
+			args: []string{"-bench", ".", "./benchcrash"},
+			// Details are not shown: they include a stack trace.
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{},
+				Summary: AllStatuses,
+			},
+			wantErr: true,
+			wantOutput: `
+*****
+════════════ BENCH ════════════
+ BENCH testcases/benchcrash.BenchmarkOK
+════════════ NONE ════════════
+  NONE testcases/benchcrash.BenchmarkZCrash
+════════════ FAIL ════════════
+  FAIL testcases/benchcrash
+
+══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:1 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name: "XTest_BuildFail",
+			args: []string{"./xtestfail"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{StatusFail, StatusNone, StatusBuildFail},
+				Summary: Statuses{StatusFail, StatusNone, StatusBuildFail},
+			},
+			wantErr: true,
+			wantOutput: `
+*****
+=== BUILD FAIL testcases/xtestfail
+
+# testcases/xtestfail_test [testcases/xtestfail.test]
+xtestfail/xtestfail_test.go:6:2: undefined: undefined
+
+════════════ BUILD FAIL ════════════
+BUILD FAIL testcases/xtestfail
+
+══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:1 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
 		},
 		{

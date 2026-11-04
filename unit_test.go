@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -817,4 +818,130 @@ func TestRenderer_PrintDetail_OutputTypes(t *testing.T) {
 	if !strings.Contains(got, "error details continuation") {
 		t.Errorf("expected continuation line in output, got: %s", got)
 	}
+}
+
+func TestEvents_Status_MultipleRuns(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		events Events
+		want   Status
+	}{
+		{"PassThenFail", Events{{Action: ActionPass}, {Action: ActionFail}}, StatusFail},
+		{"FailThenPass", Events{{Action: ActionFail}, {Action: ActionPass}}, StatusFail},
+		{"PassThenPass", Events{{Action: ActionPass}, {Action: ActionPass}}, StatusPass},
+		{"SkipThenFail", Events{{Action: ActionSkip}, {Action: ActionFail}}, StatusFail},
+		{"FailThenBuildFail", Events{{Action: ActionFail}, {Action: ActionBuildFail}}, StatusBuildFail},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.events.Status(); got != tt.want {
+				t.Errorf("Status() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTestedPackage(t *testing.T) {
+	t.Parallel()
+	tests := []struct{ in, want string }{
+		{"ex/a", "ex/a"},
+		{"ex/a [ex/a.test]", "ex/a"},
+		{"ex/a_test [ex/a.test]", "ex/a"},
+		{"ex/dep [ex/a.test]", "ex/a"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := testedPackage(tt.in); got != tt.want {
+			t.Errorf("testedPackage(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestTestStorage_Append_TestVariantBuildFail(t *testing.T) {
+	t.Parallel()
+	ts := make(TestStorage)
+	ts.Append(Event{ImportPath: "ex/a_test [ex/a.test]", Action: ActionBuildOutput, Output: "undefined: x\n"})
+	ts.Append(Event{ImportPath: "ex/a_test [ex/a.test]", Action: ActionBuildFail})
+	ts.Append(Event{Package: "ex/a", Action: ActionStart})
+	ts.Append(Event{Package: "ex/a", Action: ActionFail, FailedBuild: "ex/a_test [ex/a.test]"})
+
+	if len(ts) != 1 {
+		t.Fatalf("expected events under a single key, got keys %v", ts.OrderedKeys())
+	}
+	if got := ts.Stats().BuildFail; got != 1 {
+		t.Errorf("BuildFail = %d, want 1", got)
+	}
+}
+
+func TestTestStorage_OrderedKeys_Order(t *testing.T) {
+	t.Parallel()
+	want := []Key{
+		{"a", "TestX"},
+		{"a", "TestX/sub"},
+		{"a", ""},
+		{"a-b", "Test2"},
+		{"a-b", "Test10"},
+		{"a-b", ""},
+		{"a/c", "TestZ"},
+		{"a/c", ""},
+	}
+	ts := make(TestStorage)
+	for _, k := range want {
+		ts[k] = nil
+	}
+	// Map iteration order varies; with a consistent comparator the result
+	// must be the same every time.
+	for range 100 {
+		if got := ts.OrderedKeys(); !slices.Equal(got, want) {
+			t.Fatalf("OrderedKeys() = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestTestStorage_FinishBenchmarks(t *testing.T) {
+	t.Parallel()
+	newTS := func() TestStorage {
+		ts := make(TestStorage)
+		ts.Append(Event{Package: "p", Test: "TestA", Action: ActionPass})
+		ts.Append(Event{Package: "p", Test: "BenchmarkA", Action: ActionRun})
+		ts.Append(Event{Package: "p", Test: "BenchmarkB", Action: ActionRun})
+		ts.Append(Event{Package: "p", Test: "BenchmarkB/sub", Action: ActionRun})
+		ts.Append(Event{Package: "q", Test: "BenchmarkQ", Action: ActionRun})
+		return ts
+	}
+
+	t.Run("PackagePassed", func(t *testing.T) {
+		t.Parallel()
+		ts := newTS()
+		got := ts.FinishBenchmarks(Event{Package: "p", Action: ActionPass}, "BenchmarkB/sub")
+		want := []Key{{"p", "BenchmarkA"}, {"p", "BenchmarkB"}, {"p", "BenchmarkB/sub"}}
+		if !slices.Equal(got, want) {
+			t.Errorf("FinishBenchmarks() = %v, want %v", got, want)
+		}
+		for _, k := range want {
+			if s := ts[k].Status(); s != StatusBench {
+				t.Errorf("%v status = %s, want %s", k, s, StatusBench)
+			}
+		}
+		if s := ts[Key{"q", "BenchmarkQ"}].Status(); s != StatusNone {
+			t.Errorf("other package benchmark status = %s, want %s", s, StatusNone)
+		}
+	})
+
+	t.Run("PackageCrashed", func(t *testing.T) {
+		t.Parallel()
+		ts := newTS()
+		got := ts.FinishBenchmarks(Event{Package: "p", Action: ActionFail}, "BenchmarkB/sub")
+		want := []Key{{"p", "BenchmarkA"}}
+		if !slices.Equal(got, want) {
+			t.Errorf("FinishBenchmarks() = %v, want %v", got, want)
+		}
+		for _, k := range []Key{{"p", "BenchmarkB"}, {"p", "BenchmarkB/sub"}} {
+			if s := ts[k].Status(); s != StatusNone {
+				t.Errorf("%v status = %s, want %s", k, s, StatusNone)
+			}
+		}
+	})
 }
