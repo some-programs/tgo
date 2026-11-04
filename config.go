@@ -13,13 +13,12 @@ import (
 // Verbosity represents the level of output detail.
 type Verbosity int
 
-var (
-	V0 = Verbosity(0) // default
-	V1 = Verbosity(1) // minor changes
-	V2 = Verbosity(2) // a few more details
-	V3 = Verbosity(3) // more stuff
-	V4 = Verbosity(4) // debug
-	V5 = Verbosity(5) // (reserved)
+const (
+	V0 Verbosity = 0 // default
+	V1 Verbosity = 1 // minor changes
+	V2 Verbosity = 2 // a few more details
+	V3 Verbosity = 3 // more stuff
+	V4 Verbosity = 4 // debug
 )
 
 // Flags holds command-line and environment configuration for tgo.

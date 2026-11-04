@@ -13,7 +13,6 @@ import (
 
 var (
 	defaultColor  = color.New().SprintFunc()
-	lineColor     = color.New().SprintFunc()
 	hardLineColor = color.New().SprintFunc()
 	packageColor  = color.New().SprintFunc()
 	testColor     = color.New(color.FgMagenta).SprintFunc()
@@ -127,10 +126,9 @@ func (r *Renderer) PrintDetail(events Events, flags Flags) {
 	}
 
 	var filteredEvents Events
-loop:
 	for _, e := range es {
 		if flags.V <= V3 && strings.TrimSpace(e.Text()) == "" {
-			continue loop
+			continue
 		}
 		filteredEvents = append(filteredEvents, e)
 	}
@@ -224,41 +222,6 @@ func (r *Renderer) eventTextColor(e Event, status Status, hasOutputType bool, fa
 	return fallbackColor
 }
 
-// PrintShortSummary prints a condensed package summary for a given status.
-func (r *Renderer) PrintShortSummary(ts TestStorage, status Status) {
-	hr, header, prefix := r.statusHeader(status)
-	statusColor := statusColors[status]
-	tests := ts.FindPackageResults()
-
-	w := r.out()
-	fmt.Fprintln(w, hr, header, hr)
-	for _, key := range tests.OrderedKeys() {
-		events := ts[key]
-
-		var sb strings.Builder
-		if fe := events.FindFirstByAction(EndingActions...); fe != nil && fe.Elapsed >= 0.01 {
-			sb.WriteString("  ")
-			sb.WriteString(timeColor(fmt.Sprintf("(%.2fs)", fe.Elapsed)))
-		}
-
-		count := ts.FindPackageTests(key.Package).CountTests()
-		sb.WriteString("   ")
-		sb.WriteString(statusColor(fmt.Sprintf("<%v tests>", count)))
-
-		if events.IsPackageWithoutTest() {
-			sb.WriteString("  ")
-			sb.WriteString("[no tests]")
-		}
-
-		coverage := events.FindCoverage()
-		if len(coverage) > 0 {
-			sb.WriteString("  ")
-			sb.WriteString(coverColor(fmt.Sprintf("{%s}", coverage)))
-		}
-		fmt.Fprintf(w, "%s%s%s\n", prefix, packageColor(key.Package), sb.String())
-	}
-}
-
 // PrintSummary prints all tests and packages for a given status.
 func (r *Renderer) PrintSummary(ts TestStorage, status Status) {
 	hr, header, prefix := r.statusHeader(status)
@@ -285,7 +248,6 @@ func (r *Renderer) PrintSummary(ts TestStorage, status Status) {
 // PrintCoverage prints code coverage report for packages.
 func (r *Renderer) PrintCoverage(ts TestStorage) {
 	hr := coverColor("════════════")
-	var prefix string
 
 	w := r.out()
 	fmt.Fprintln(w, hr, coverColor("COVR"), hr)
@@ -296,7 +258,7 @@ func (r *Renderer) PrintCoverage(ts TestStorage) {
 			if len(coverage) > 0 {
 				coverage = fmt.Sprintf("%6s ", coverage)
 			}
-			fmt.Fprintf(w, "%s%s%s\n", prefix, coverColor(coverage), packageColor(key.Package))
+			fmt.Fprintf(w, "%s%s\n", coverColor(coverage), packageColor(key.Package))
 		}
 	}
 }
@@ -331,33 +293,17 @@ func (r *Renderer) PrintFooter(tests TestStorage, t0 time.Time) {
 
 	w := r.out()
 	fmt.Fprintln(w, "")
+	now := time.Now()
 	sep := " " + statusColor("|") + " "
 	status := statusColor("══════") + " " +
-		statusColor(time.Now().Format("15:04:05")) +
+		statusColor(now.Format("15:04:05")) +
 		sep + pass +
 		sep + fail +
 		sep + buildfail +
 		sep + none +
 		sep + skip +
-		sep + statusColor(time.Now().Sub(t0).Round(time.Millisecond).String()) +
+		sep + statusColor(now.Sub(t0).Round(time.Millisecond).String()) +
 		"  " + statusColor("══════")
 
 	fmt.Fprintln(w, status)
-}
-
-// Backwards-compatible methods on Events and TestStorage delegating to defaultRenderer
-func (es Events) PrintDetail(flags Flags) {
-	defaultRenderer.PrintDetail(es, flags)
-}
-
-func (ts TestStorage) PrintShortSummary(status Status) {
-	defaultRenderer.PrintShortSummary(ts, status)
-}
-
-func (ts TestStorage) PrintSummary(status Status) {
-	defaultRenderer.PrintSummary(ts, status)
-}
-
-func (ts TestStorage) PrintCoverage() {
-	defaultRenderer.PrintCoverage(ts)
 }

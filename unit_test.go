@@ -5,7 +5,6 @@ import (
 	"flag"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -162,23 +161,19 @@ func TestAction_Methods(t *testing.T) {
 	tests := []struct {
 		action     Action
 		wantStatus Status
-		wantEnding bool
 	}{
-		{ActionPass, StatusPass, true},
-		{ActionFail, StatusFail, true},
-		{ActionSkip, StatusSkip, true},
-		{ActionBench, StatusBench, true},
-		{ActionBuildFail, StatusBuildFail, true},
-		{ActionRun, StatusNone, false},
-		{ActionOutput, StatusNone, false},
+		{ActionPass, StatusPass},
+		{ActionFail, StatusFail},
+		{ActionSkip, StatusSkip},
+		{ActionBench, StatusBench},
+		{ActionBuildFail, StatusBuildFail},
+		{ActionRun, StatusNone},
+		{ActionOutput, StatusNone},
 	}
 
 	for _, tt := range tests {
 		if got := tt.action.Status(); got != tt.wantStatus {
 			t.Errorf("%s.Status() = %v, want %v", tt.action, got, tt.wantStatus)
-		}
-		if got := tt.action.IsEnding(); got != tt.wantEnding {
-			t.Errorf("%s.IsEnding() = %v, want %v", tt.action, got, tt.wantEnding)
 		}
 	}
 }
@@ -208,25 +203,7 @@ func TestOutputType_Methods(t *testing.T) {
 		}
 	}
 
-	if len(AllOutputTypes) != 4 {
-		t.Errorf("expected 4 output types, got %d", len(AllOutputTypes))
-	}
-
-	frameEv := Event{OutputType: OutputTypeFrame}
-	if !frameEv.IsFrame() {
-		t.Error("expected IsFrame() to be true for OutputTypeFrame")
-	}
-	if frameEv.IsError() {
-		t.Error("expected IsError() to be false for OutputTypeFrame")
-	}
-
 	errEv := Event{OutputType: OutputTypeError}
-	if errEv.IsFrame() {
-		t.Error("expected IsFrame() to be false for OutputTypeError")
-	}
-	if !errEv.IsError() {
-		t.Error("expected IsError() to be true for OutputTypeError")
-	}
 	if !errEv.IsErrorHeader() {
 		t.Error("expected IsErrorHeader() to be true for OutputTypeError")
 	}
@@ -235,9 +212,6 @@ func TestOutputType_Methods(t *testing.T) {
 	}
 
 	errContEv := Event{OutputType: OutputTypeErrorContinue}
-	if !errContEv.IsError() {
-		t.Error("expected IsError() to be true for OutputTypeErrorContinue")
-	}
 	if errContEv.IsErrorHeader() {
 		t.Error("expected IsErrorHeader() to be false for OutputTypeErrorContinue")
 	}
@@ -352,9 +326,6 @@ func TestEvent_JSON(t *testing.T) {
 	if e.OutputType != OutputTypeFrame {
 		t.Errorf("expected OutputType %q, got %q", OutputTypeFrame, e.OutputType)
 	}
-	if !e.IsFrame() {
-		t.Error("expected IsFrame() to be true")
-	}
 
 	rawErr := `{"Time":"2026-08-19T10:00:00Z","Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"error here\n","OutputType":"error"}`
 	var eErr Event
@@ -363,9 +334,6 @@ func TestEvent_JSON(t *testing.T) {
 	}
 	if eErr.OutputType != OutputTypeError {
 		t.Errorf("expected OutputType %q, got %q", OutputTypeError, eErr.OutputType)
-	}
-	if !eErr.IsError() {
-		t.Error("expected IsError() to be true")
 	}
 }
 
@@ -528,69 +496,10 @@ func TestTestStorage_Methods(t *testing.T) {
 		}
 	})
 
-	t.Run("FilterPackageResults", func(t *testing.T) {
-		t.Parallel()
-		filtered := newTS().FilterPackageResults()
-		if len(filtered) != 2 {
-			t.Error("expected 2 test results")
-		}
-	})
-
-	t.Run("FindPackageResults", func(t *testing.T) {
-		t.Parallel()
-		filtered := newTS().FindPackageResults()
-		if len(filtered) != 1 {
-			t.Error("expected 1 package result")
-		}
-	})
-
 	t.Run("CountTests", func(t *testing.T) {
 		t.Parallel()
 		if newTS().CountTests() != 2 {
 			t.Errorf("expected 2 tests, got %d", newTS().CountTests())
-		}
-	})
-
-	t.Run("Union", func(t *testing.T) {
-		t.Parallel()
-		ts2 := make(TestStorage)
-		ts2.Append(Event{Package: "pkg2", Action: ActionPass})
-		union := newTS().Union(ts2)
-		if len(union) != 4 {
-			t.Errorf("union failed, expected 4 results, got %d", len(union))
-		}
-	})
-
-	t.Run("FilterKeys", func(t *testing.T) {
-		t.Parallel()
-		exclude := map[Key]bool{{Package: "pkg", Test: "test1"}: true}
-		filtered := newTS().FilterKeys(exclude)
-		if len(filtered) != 2 {
-			t.Error("FilterKeys failed")
-		}
-	})
-
-	t.Run("FindPackageTests", func(t *testing.T) {
-		t.Parallel()
-		pkgTests := newTS().FindPackageTests("pkg")
-		if len(pkgTests) != 3 {
-			t.Error("FindPackageTests failed")
-		}
-	})
-
-	t.Run("FindByAction", func(t *testing.T) {
-		t.Parallel()
-		failed := newTS().FindByAction(ActionFail)
-		if len(failed) != 1 {
-			t.Error("FindByAction failed")
-		}
-	})
-
-	t.Run("FilterAction", func(t *testing.T) {
-		t.Parallel()
-		noFail := newTS().FilterAction(ActionFail)
-		if len(noFail) != 2 {
-			t.Error("FilterAction failed")
 		}
 	})
 
@@ -658,75 +567,6 @@ func TestTestStorage_Methods(t *testing.T) {
 	})
 }
 
-var defaultRendererMu sync.Mutex
-
-// captureStdout is a test helper that redirects defaultRenderer output and returns its content as a string.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	defaultRendererMu.Lock()
-	defer defaultRendererMu.Unlock()
-	var sb strings.Builder
-	old := defaultRenderer.w
-	defaultRenderer.w = &sb
-	defer func() {
-		defaultRenderer.w = old
-	}()
-	fn()
-	return sb.String()
-}
-
-func TestPrintingFunctions(t *testing.T) {
-	t.Parallel()
-	newTS := func() TestStorage {
-		ts := make(TestStorage)
-		ts.Append(Event{Package: "pkg", Action: ActionPass, Elapsed: 0.1})
-		ts.Append(Event{Package: "pkg", Test: "Test1", Action: ActionPass, Elapsed: 0.1})
-		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
-		return ts
-	}
-
-	t.Run("PrintShortSummary", func(t *testing.T) {
-		t.Parallel()
-		got := captureStdout(t, func() {
-			newTS().PrintShortSummary(StatusPass)
-		})
-		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") {
-			t.Errorf("PrintShortSummary output missing expected content: %q", got)
-		}
-	})
-
-	t.Run("PrintSummary", func(t *testing.T) {
-		t.Parallel()
-		got := captureStdout(t, func() {
-			newTS().PrintSummary(StatusPass)
-		})
-		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg.Test1") {
-			t.Errorf("PrintSummary output missing expected content: %q", got)
-		}
-	})
-
-	t.Run("PrintCoverage", func(t *testing.T) {
-		t.Parallel()
-		got := captureStdout(t, func() {
-			newTS().PrintCoverage()
-		})
-		if !strings.Contains(got, "COVR") || !strings.Contains(got, "50.0%") {
-			t.Errorf("PrintCoverage output missing expected content: %q", got)
-		}
-	})
-
-	t.Run("PrintDetail", func(t *testing.T) {
-		t.Parallel()
-		events := newTS()[Key{Package: "pkg", Test: "Test1"}]
-		got := captureStdout(t, func() {
-			events.PrintDetail(Flags{V: V0})
-		})
-		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") || !strings.Contains(got, "Test1") {
-			t.Errorf("PrintDetail output missing expected content: %q", got)
-		}
-	})
-}
-
 func TestRenderer_DirectWriter(t *testing.T) {
 	t.Parallel()
 	newTS := func() TestStorage {
@@ -736,17 +576,6 @@ func TestRenderer_DirectWriter(t *testing.T) {
 		ts.Append(Event{Package: "pkg_cov", Action: ActionOutput, Output: "coverage: 50.0% of statements\n"})
 		return ts
 	}
-
-	t.Run("PrintShortSummary", func(t *testing.T) {
-		t.Parallel()
-		var sb strings.Builder
-		r := NewRenderer(&sb)
-		r.PrintShortSummary(newTS(), StatusPass)
-		got := sb.String()
-		if !strings.Contains(got, "PASS") || !strings.Contains(got, "pkg") {
-			t.Errorf("PrintShortSummary output missing expected content: %q", got)
-		}
-	})
 
 	t.Run("PrintSummary", func(t *testing.T) {
 		t.Parallel()

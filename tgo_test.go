@@ -127,4 +127,3 @@ func TestRun_Mixed_With_V(t *testing.T) {
 		t.Errorf("expected error for mixed failing test, got nil")
 	}
 }
-

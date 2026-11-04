@@ -91,16 +91,6 @@ func (ts TestStorage) FinishBenchmarks(pkg Event, running string) []Key {
 	return keys
 }
 
-// Union merges multiple TestStorage instances.
-func (ts TestStorage) Union(values ...TestStorage) TestStorage {
-	tests := make(TestStorage, len(ts))
-	maps.Copy(tests, ts)
-	for _, v := range values {
-		maps.Copy(tests, v)
-	}
-	return tests
-}
-
 // Filter returns a new TestStorage containing only entries that satisfy the predicate.
 func (ts TestStorage) Filter(predicate func(k Key, events Events) bool) TestStorage {
 	tests := make(TestStorage)
@@ -110,65 +100,6 @@ func (ts TestStorage) Filter(predicate func(k Key, events Events) bool) TestStor
 		}
 	}
 	return tests
-}
-
-// FilterPackageResults returns only test-level events (non-empty Test).
-func (ts TestStorage) FilterPackageResults() TestStorage {
-	return ts.Filter(func(k Key, _ Events) bool {
-		return k.Test != ""
-	})
-}
-
-// FindPackageResults returns only package-level events (empty Test).
-func (ts TestStorage) FindPackageResults() TestStorage {
-	return ts.Filter(func(k Key, _ Events) bool {
-		return k.Test == ""
-	})
-}
-
-// FilterKeys returns tests excluding those in the exclude map.
-func (ts TestStorage) FilterKeys(exclude map[Key]bool) TestStorage {
-	return ts.Filter(func(k Key, _ Events) bool {
-		return !exclude[k]
-	})
-}
-
-// FindPackageTests returns all events matching a package name.
-func (ts TestStorage) FindPackageTests(name string) TestStorage {
-	return ts.Filter(func(k Key, _ Events) bool {
-		return k.Package == name
-	})
-}
-
-// FindByAction returns tests containing at least one event matching the action.
-func (ts TestStorage) FindByAction(action Action) TestStorage {
-	return ts.Filter(func(_ Key, events Events) bool {
-		for _, e := range events {
-			if e.Action == action {
-				return true
-			}
-			if action == ActionBuildFail && e.Action == ActionFail && e.FailedBuild != "" {
-				return true
-			}
-		}
-		return false
-	})
-}
-
-// FilterAction returns tests that do NOT contain any of the specified actions.
-func (ts TestStorage) FilterAction(actions ...Action) TestStorage {
-	actionMatch := make(map[Action]bool, len(actions))
-	for _, action := range actions {
-		actionMatch[action] = true
-	}
-	return ts.Filter(func(_ Key, events Events) bool {
-		for _, e := range events {
-			if actionMatch[e.Action] {
-				return false
-			}
-		}
-		return true
-	})
 }
 
 // FindByStatus returns tests matching a terminal status.

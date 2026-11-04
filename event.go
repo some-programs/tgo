@@ -33,11 +33,6 @@ func (a Action) Status() Status {
 	}
 }
 
-// IsEnding returns true if the action is a terminal test action.
-func (a Action) IsEnding() bool {
-	return a.Status() != StatusNone
-}
-
 type Actions []Action
 
 var (
@@ -55,13 +50,6 @@ var (
 	ActionBuildFail   = Action("build-fail")
 	ActionAttr        = Action("attr")      // t.Attr, new in go 1.25
 	ActionArtifacts   = Action("artifacts") // t.ArtifactDir with -artifacts, new in go 1.26
-
-	AllActions = Actions{
-		ActionRun, ActionPause, ActionCont, ActionPass,
-		ActionBench, ActionFail, ActionOutput, ActionSkip,
-		ActionStart, ActionFinish, ActionBuildOutput, ActionBuildFail,
-		ActionAttr, ActionArtifacts,
-	}
 
 	EndingActions = Actions{ActionFail, ActionSkip, ActionPass, ActionBench, ActionBuildFail}
 )
@@ -94,13 +82,6 @@ var (
 		StatusBuildFail,
 	}
 
-	DefaultStatuses = Statuses{
-		StatusNone,
-		StatusFail,
-		StatusBuildFail,
-		StatusBench,
-	}
-
 	statusNames = map[Status]string{
 		StatusFail:      "FAIL",
 		StatusPass:      "PASS",
@@ -123,15 +104,6 @@ const (
 	OutputTypeFrame         OutputType = "frame"
 	OutputTypeError         OutputType = "error"
 	OutputTypeErrorContinue OutputType = "error-continue"
-)
-
-var (
-	AllOutputTypes = []OutputType{
-		OutputTypeBlank,
-		OutputTypeFrame,
-		OutputTypeError,
-		OutputTypeErrorContinue,
-	}
 )
 
 // Key identifies a package and test together.
@@ -173,14 +145,6 @@ func (e Event) Text() string {
 		return "artifacts: " + e.Path + "\n"
 	}
 	return e.Output
-}
-
-func (e Event) IsFrame() bool {
-	return e.OutputType == OutputTypeFrame
-}
-
-func (e Event) IsError() bool {
-	return e.OutputType == OutputTypeError || e.OutputType == OutputTypeErrorContinue
 }
 
 func (e Event) IsErrorHeader() bool {
