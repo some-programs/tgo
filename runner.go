@@ -36,13 +36,7 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 
 	coverEnabled := coverageRequested(argv)
 
-	args := []string{"test", "-json"}
-	for _, v := range argv {
-		if v == "-v" {
-			continue
-		}
-		args = append(args, v)
-	}
+	args := append([]string{"test", "-json"}, goTestArgs(argv)...)
 	log.Println("args", args)
 
 	cmd := exec.CommandContext(ctx, flags.Bin, args...)
@@ -83,13 +77,30 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 	return nil
 }
 
+// goTestArgs returns argv without any -v flags, since -v makes go test -json
+// stop marking error output with OutputType "error". Verbose output is
+// handled by tgo itself. Arguments after -args are passed through unchanged.
+func goTestArgs(argv []string) []string {
+	var args []string
+	for i, arg := range argv {
+		if isArgsFlag(arg) {
+			return append(args, argv[i:]...)
+		}
+		if isV, _ := parseVerboseFlag(arg); isV {
+			continue
+		}
+		args = append(args, arg)
+	}
+	return args
+}
+
 // coverageRequested reports whether the go test arguments enable coverage:
 // -cover, or any of -covermode, -coverpkg and -coverprofile, which imply it.
 // Arguments after -args are for the test binary and are ignored.
 func coverageRequested(argv []string) bool {
 	enabled := false
 	for _, arg := range argv {
-		if arg == "-args" || arg == "--args" {
+		if isArgsFlag(arg) {
 			break
 		}
 		flag, ok := strings.CutPrefix(arg, "-")

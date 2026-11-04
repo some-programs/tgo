@@ -30,7 +30,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	flags.Setup(os.Args)
+	set := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	flags.Setup(os.Args[1:], set)
 
 	if flags.PrintConfig {
 		flags.printConfig(os.Stderr)

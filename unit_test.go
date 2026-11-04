@@ -54,7 +54,7 @@ func TestFlags_Setup(t *testing.T) {
 	t.Run("All", func(t *testing.T) {
 		t.Parallel()
 		f := Flags{All: true}
-		f.Setup(nil)
+		f.Setup(nil, nil)
 		if len(f.Results) != len(AllStatuses) {
 			t.Error("expected all statuses in Results")
 		}
@@ -63,11 +63,94 @@ func TestFlags_Setup(t *testing.T) {
 	t.Run("V2", func(t *testing.T) {
 		t.Parallel()
 		f := Flags{}
-		f.Setup([]string{"-v"})
+		f.Setup([]string{"-v"}, nil)
+		if f.V != V2 {
+			t.Errorf("expected V2, got %v", f.V)
+		}
+		if !slices.Equal(f.Results, Statuses{StatusBench, StatusPass, StatusNone, StatusFail}) {
+			t.Errorf("unexpected Results %v", f.Results)
+		}
+	})
+
+	t.Run("NoV", func(t *testing.T) {
+		t.Parallel()
+		f := Flags{Results: Statuses{StatusFail}}
+		f.Setup([]string{"./...", "-args", "-v"}, nil)
+		if f.V != V0 || !slices.Equal(f.Results, Statuses{StatusFail}) {
+			t.Errorf("Setup changed flags without -v: V=%v Results=%v", f.V, f.Results)
+		}
+	})
+
+	t.Run("VOnlyRaises", func(t *testing.T) {
+		t.Parallel()
+		f := Flags{V: V4}
+		f.Setup([]string{"-v"}, map[string]bool{"v": true})
+		if f.V != V4 {
+			t.Errorf("expected V4 to be kept, got %v", f.V)
+		}
+	})
+
+	t.Run("KeepsExplicitSettings", func(t *testing.T) {
+		t.Parallel()
+		f := Flags{
+			Results:          Statuses{StatusFail},
+			Summary:          Statuses{StatusSkip},
+			HideEmptyResults: Statuses{StatusPass},
+		}
+		f.Setup([]string{"-v"}, map[string]bool{"results": true, "summary": true})
+		if !slices.Equal(f.Results, Statuses{StatusFail}) {
+			t.Errorf("explicit Results replaced: %v", f.Results)
+		}
+		if !slices.Equal(f.Summary, Statuses{StatusSkip}) {
+			t.Errorf("explicit Summary replaced: %v", f.Summary)
+		}
+		if !slices.Equal(f.HideEmptyResults, Statuses{StatusBench, StatusPass, StatusNone}) {
+			t.Errorf("unset HideEmptyResults not filled in: %v", f.HideEmptyResults)
+		}
+	})
+
+	t.Run("AllWins", func(t *testing.T) {
+		t.Parallel()
+		f := Flags{All: true}
+		f.Setup([]string{"-v"}, map[string]bool{"all": true})
+		if !slices.Equal(f.Results, AllStatuses) || !slices.Equal(f.Summary, AllStatuses) {
+			t.Errorf("-v replaced -all settings: Results=%v Summary=%v", f.Results, f.Summary)
+		}
 		if f.V != V2 {
 			t.Errorf("expected V2, got %v", f.V)
 		}
 	})
+}
+
+func TestVerboseFlags(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args    []string
+		verbose bool
+		goArgs  []string
+	}{
+		{nil, false, nil},
+		{[]string{"./..."}, false, []string{"./..."}},
+		{[]string{"-v", "./..."}, true, []string{"./..."}},
+		{[]string{"--v"}, true, nil},
+		{[]string{"-v=true"}, true, nil},
+		{[]string{"-v=false"}, false, nil},
+		{[]string{"-v", "-v=false"}, false, nil},
+		{[]string{"-test.v"}, true, nil},
+		{[]string{"-test.v=true"}, true, nil},
+		{[]string{"-vet=off"}, false, []string{"-vet=off"}},
+		{[]string{"v"}, false, []string{"v"}},
+		{[]string{"./...", "-args", "-v"}, false, []string{"./...", "-args", "-v"}},
+		{[]string{"-v", "./...", "--args", "-v"}, true, []string{"./...", "--args", "-v"}},
+	}
+	for _, tt := range tests {
+		if got := verboseRequested(tt.args); got != tt.verbose {
+			t.Errorf("verboseRequested(%q) = %v, want %v", tt.args, got, tt.verbose)
+		}
+		if got := goTestArgs(tt.args); !slices.Equal(got, tt.goArgs) {
+			t.Errorf("goTestArgs(%q) = %q, want %q", tt.args, got, tt.goArgs)
+		}
+	}
 }
 
 func TestAction_Methods(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -89,34 +90,76 @@ TGO config:
 `, f.Results.String(), f.Summary.String(), f.HideEmptyResults.String())
 }
 
-// Setup applies overrides based on CLI arguments and configuration.
-func (f *Flags) Setup(args []string) {
+// Setup applies overrides based on the go test arguments and configuration.
+// set holds the names of the flags given explicitly, by environment variable
+// or config file.
+//
+// A -v argument raises the verbosity to at least V2 and shows passing tests,
+// but does not replace results, summary or res-hide settings given
+// explicitly, nor those implied by -all.
+func (f *Flags) Setup(args []string, set map[string]bool) {
 	if f.All {
 		f.Results = AllStatuses
 		f.Summary = AllStatuses
 		f.HideEmptyResults = Statuses{}
 	}
 
-	for _, v := range args {
-		if v == "-v" {
-			f.V = V2
-			f.Results = Statuses{
-				StatusBench,
-				StatusPass,
-				StatusNone,
-				StatusFail,
-			}
-			f.HideEmptyResults = Statuses{
-				StatusBench,
-				StatusPass,
-				StatusNone,
-			}
-			f.Summary = Statuses{
-				StatusNone,
-				StatusFail,
-			}
+	if !verboseRequested(args) {
+		return
+	}
+	f.V = max(f.V, V2)
+	if f.All {
+		return
+	}
+	if !set["results"] {
+		f.Results = Statuses{StatusBench, StatusPass, StatusNone, StatusFail}
+	}
+	if !set["res-hide"] {
+		f.HideEmptyResults = Statuses{StatusBench, StatusPass, StatusNone}
+	}
+	if !set["summary"] {
+		f.Summary = Statuses{StatusNone, StatusFail}
+	}
+}
+
+// verboseRequested reports whether the go test arguments enable -v.
+// Arguments after -args are for the test binary and are ignored.
+func verboseRequested(args []string) bool {
+	enabled := false
+	for _, arg := range args {
+		if isArgsFlag(arg) {
+			break
+		}
+		if isV, on := parseVerboseFlag(arg); isV {
+			enabled = on
 		}
 	}
+	return enabled
+}
+
+// parseVerboseFlag reports whether arg is go test's -v flag in any of its
+// forms (-v, --v, -v=true, -test.v, ...), and whether it enables verbose
+// output.
+func parseVerboseFlag(arg string) (isV, on bool) {
+	name, ok := strings.CutPrefix(arg, "-")
+	if !ok {
+		return false, false
+	}
+	name, value, hasValue := strings.Cut(strings.TrimPrefix(name, "-"), "=")
+	if name != "v" && name != "test.v" {
+		return false, false
+	}
+	if !hasValue {
+		return true, true
+	}
+	on, err := strconv.ParseBool(value)
+	return true, err == nil && on
+}
+
+// isArgsFlag reports whether arg is go test's -args flag, after which all
+// arguments are passed to the test binary.
+func isArgsFlag(arg string) bool {
+	return arg == "-args" || arg == "--args"
 }
 
 // Any returns true if any of the target statuses exist in ss.

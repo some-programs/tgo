@@ -513,6 +513,51 @@ func TestFullProgram_CLI(t *testing.T) {
 `,
 		},
 		{
+			name:    "V_KeepsResults",
+			args:    []string{"-v", "./mixed"},
+			env:     []string{"TGO_RESULTS=none"},
+			wantErr: true,
+			wantOutput: `
+*****
+════════════ FAIL ════════════
+  FAIL testcases/mixed.TestMixed
+  FAIL testcases/mixed
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name:    "V_KeepsVerbosity",
+			args:    []string{"-v", "./output"},
+			env:     []string{"TGO_V=3"},
+			wantErr: false,
+			wantOutput: `
+*****
+=== PASS testcases/output.TestOutput
+
+ output 12:00:00.000 This is some test output.
+ output 12:00:00.000     output_test.go:10: This is a test log message.
+
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name:    "V_True",
+			args:    []string{"-v=true", "./output"},
+			wantErr: false,
+			wantOutput: `
+*****
+=== PASS testcases/output.TestOutput
+
+This is some test output.
+    output_test.go:10: This is a test log message.
+
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
 			name:    "Mixed_With_V",
 			args:    []string{"-v", "./mixed"},
 			wantErr: true,
