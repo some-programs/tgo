@@ -207,6 +207,27 @@ func (ts TestStorage) CountTests() int {
 	return count
 }
 
+// countUnfinished counts the unfinished tests in ts, which holds only
+// entries with status none. A package that never finished counts as one if
+// none of its tests is unfinished, for example when go test was interrupted
+// before the first test started.
+func (ts TestStorage) countUnfinished() int {
+	count := 0
+	withTests := make(map[string]bool)
+	for key := range ts {
+		if key.Test != "" {
+			count++
+			withTests[key.Package] = true
+		}
+	}
+	for key := range ts {
+		if key.Test == "" && !withTests[key.Package] {
+			count++
+		}
+	}
+	return count
+}
+
 // TestStats holds aggregated counts of test results.
 type TestStats struct {
 	Pass      int
@@ -228,7 +249,7 @@ func (ts TestStorage) Stats() TestStats {
 		Pass:      allPass.CountTests(),
 		Fail:      allFail.CountTests(),
 		BuildFail: allBuildFail.CountTests(),
-		None:      len(allNone),
+		None:      allNone.countUnfinished(),
 		Skip:      allSkip.CountTests(),
 	}
 }

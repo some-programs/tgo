@@ -427,19 +427,6 @@ func TestEvents_Methods(t *testing.T) {
 		}
 	})
 
-	t.Run("SortByTime", func(t *testing.T) {
-		t.Parallel()
-		now := time.Now()
-		es2 := Events{
-			{Time: now.Add(time.Second)},
-			{Time: now},
-		}
-		es2.SortByTime()
-		if !es2[0].Time.Before(es2[1].Time) {
-			t.Error("events not sorted by time")
-		}
-	})
-
 	t.Run("Compact", func(t *testing.T) {
 		t.Parallel()
 		es3 := Events{
@@ -1179,5 +1166,92 @@ func TestParseFlag(t *testing.T) {
 		if got := (result{name, value, hasValue, ok}); got != tt.want {
 			t.Errorf("parseFlag(%q) = %+v, want %+v", tt.arg, got, tt.want)
 		}
+	}
+}
+
+func TestRenderer_NoTrailingWhitespace(t *testing.T) {
+	t.Parallel()
+	input := `{"Action":"run","Package":"ex/a","Test":"TestA"}
+{"Action":"output","Package":"ex/a","Test":"TestA","Output":"    a_test.go:5: log\n"}
+{"Action":"output","Package":"ex/a","Test":"TestA","Output":"    a_test.go:6: boom\n","OutputType":"error"}
+{"Action":"fail","Package":"ex/a","Test":"TestA"}
+{"Action":"fail","Package":"ex/a"}
+`
+	for _, v := range []Verbosity{V0, V3, V4} {
+		var sb strings.Builder
+		flags := Flags{V: v, Results: Statuses{StatusFail}, Summary: Statuses{StatusFail}}
+		if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), false, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(sb.String(), "\n") {
+			if strings.TrimRight(line, " \t") != line {
+				t.Errorf("V%d: line %d has trailing whitespace: %q", v, i+1, line)
+			}
+		}
+	}
+}
+
+func TestRenderer_SummaryPrefixAligned(t *testing.T) {
+	t.Parallel()
+	ts := make(TestStorage)
+	ts.Append(Event{Package: "ex/a", Action: ActionFail})
+	ts.Append(Event{Package: "ex/b", Action: ActionFail, FailedBuild: "ex/b"})
+
+	var sb strings.Builder
+	r := NewRenderer(&sb)
+	r.PrintSummary(ts.FindByStatus(StatusFail), StatusFail)
+	r.PrintSummary(ts.FindByStatus(StatusBuildFail), StatusBuildFail)
+
+	columns := map[string]int{}
+	for _, line := range strings.Split(sb.String(), "\n") {
+		for _, pkg := range []string{"ex/a", "ex/b"} {
+			if i := strings.Index(line, pkg); i >= 0 {
+				columns[pkg] = i
+			}
+		}
+	}
+	if len(columns) != 2 || columns["ex/a"] != columns["ex/b"] {
+		t.Errorf("package names not aligned: %v\n%s", columns, sb.String())
+	}
+}
+
+func TestTestStorage_Stats_None(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		events []Event
+		want   int
+	}{
+		{"InterruptedTest", []Event{
+			{Package: "p", Action: ActionStart},
+			{Package: "p", Test: "TestA", Action: ActionRun},
+		}, 1},
+		{"InterruptedBeforeTests", []Event{
+			{Package: "p", Action: ActionStart},
+		}, 1},
+		{"TwoTests", []Event{
+			{Package: "p", Test: "TestA", Action: ActionRun},
+			{Package: "p", Test: "TestB", Action: ActionRun},
+		}, 2},
+		{"CrashedPackageFinished", []Event{
+			{Package: "p", Test: "TestA", Action: ActionRun},
+			{Package: "p", Action: ActionFail},
+		}, 1},
+		{"Finished", []Event{
+			{Package: "p", Test: "TestA", Action: ActionPass},
+			{Package: "p", Action: ActionPass},
+		}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ts := make(TestStorage)
+			for _, e := range tt.events {
+				ts.Append(e)
+			}
+			if got := ts.Stats().None; got != tt.want {
+				t.Errorf("Stats().None = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }

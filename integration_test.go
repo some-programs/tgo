@@ -62,8 +62,8 @@ func TestFullProgram(t *testing.T) {
 === PASS testcases/pass.TestPass
 === PASS testcases/pass
 ════════════ PASS ════════════
-  PASS testcases/pass.TestPass
-  PASS testcases/pass
+      PASS testcases/pass.TestPass
+      PASS testcases/pass
 
 ══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -82,8 +82,8 @@ func TestFullProgram(t *testing.T) {
 === FAIL testcases/fail.TestFail
 === FAIL testcases/fail
 ════════════ FAIL ════════════
-  FAIL testcases/fail.TestFail
-  FAIL testcases/fail
+      FAIL testcases/fail.TestFail
+      FAIL testcases/fail
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -104,7 +104,7 @@ func TestFullProgram(t *testing.T) {
     skip_test.go:6: skipping test
 
 ════════════ SKIP ════════════
-  SKIP testcases/skip.TestSkip
+      SKIP testcases/skip.TestSkip
 
 ══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:1 | 0ms  ══════
 `,
@@ -127,8 +127,8 @@ func TestFullProgram(t *testing.T) {
 
 === FAIL testcases/errtypes
 ════════════ FAIL ════════════
-  FAIL testcases/errtypes.TestErrors
-  FAIL testcases/errtypes
+      FAIL testcases/errtypes.TestErrors
+      FAIL testcases/errtypes
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -147,8 +147,8 @@ func TestFullProgram(t *testing.T) {
 === PASS testcases/cov.TestAdd
 === PASS testcases/cov  {100.0%}
 ════════════ PASS ════════════
-  PASS testcases/cov.TestAdd
-  PASS testcases/cov  {100.0%}
+      PASS testcases/cov.TestAdd
+      PASS testcases/cov  {100.0%}
 ════════════ COVR ════════════
 100.0% testcases/cov
 
@@ -220,9 +220,9 @@ func TestFullProgram(t *testing.T) {
 *****
 === FAIL testcases/crash
 ════════════ FAIL ════════════
-  FAIL testcases/crash
+      FAIL testcases/crash
 ════════════ NONE ════════════
-  NONE testcases/crash.TestCrash
+      NONE testcases/crash.TestCrash
 
 ══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:1 | SKIP:0 | 0ms  ══════
 `,
@@ -267,8 +267,8 @@ BUILD FAIL testcases/buildfail
 
 === FAIL testcases/flaky
 ════════════ FAIL ════════════
-  FAIL testcases/flaky.TestFlaky
-  FAIL testcases/flaky
+      FAIL testcases/flaky.TestFlaky
+      FAIL testcases/flaky
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -286,10 +286,10 @@ BUILD FAIL testcases/buildfail
 			wantOutput: `
 *****
 ════════════ BENCH ════════════
- BENCH testcases/benchfail.BenchmarkOK
+     BENCH testcases/benchfail.BenchmarkOK
 ════════════ FAIL ════════════
-  FAIL testcases/benchfail.BenchmarkZFail
-  FAIL testcases/benchfail
+      FAIL testcases/benchfail.BenchmarkZFail
+      FAIL testcases/benchfail
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -307,11 +307,11 @@ BUILD FAIL testcases/buildfail
 			wantOutput: `
 *****
 ════════════ BENCH ════════════
- BENCH testcases/benchcrash.BenchmarkOK
+     BENCH testcases/benchcrash.BenchmarkOK
 ════════════ NONE ════════════
-  NONE testcases/benchcrash.BenchmarkZCrash
+      NONE testcases/benchcrash.BenchmarkZCrash
 ════════════ FAIL ════════════
-  FAIL testcases/benchcrash
+      FAIL testcases/benchcrash
 
 ══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:1 | SKIP:0 | 0ms  ══════
 `,
@@ -388,8 +388,8 @@ attr: issue=123
    pass 12:00:00.000
 
 ════════════ PASS ════════════
-  PASS testcases/output.TestOutput
-  PASS testcases/output
+      PASS testcases/output.TestOutput
+      PASS testcases/output
 
 ══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -414,8 +414,8 @@ attr: issue=123
 
 === FAIL testcases/mixed
 ════════════ FAIL ════════════
-  FAIL testcases/mixed.TestMixed
-  FAIL testcases/mixed
+      FAIL testcases/mixed.TestMixed
+      FAIL testcases/mixed
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -477,8 +477,8 @@ func TestFullProgram_CLI(t *testing.T) {
 === PASS testcases/pass.TestPass
 === PASS testcases/pass
 ════════════ PASS ════════════
-  PASS testcases/pass.TestPass
-  PASS testcases/pass
+      PASS testcases/pass.TestPass
+      PASS testcases/pass
 
 ══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -492,8 +492,8 @@ func TestFullProgram_CLI(t *testing.T) {
 === FAIL testcases/fail.TestFail
 === FAIL testcases/fail
 ════════════ FAIL ════════════
-  FAIL testcases/fail.TestFail
-  FAIL testcases/fail
+      FAIL testcases/fail.TestFail
+      FAIL testcases/fail
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -510,7 +510,7 @@ func TestFullProgram_CLI(t *testing.T) {
     skip_test.go:6: skipping test
 
 ════════════ SKIP ════════════
-  SKIP testcases/skip.TestSkip
+      SKIP testcases/skip.TestSkip
 
 ══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:1 | 0ms  ══════
 `,
@@ -525,8 +525,8 @@ func TestFullProgram_CLI(t *testing.T) {
 === PASS testcases/cov.TestAdd
 === PASS testcases/cov  {100.0%}
 ════════════ PASS ════════════
-  PASS testcases/cov.TestAdd
-  PASS testcases/cov  {100.0%}
+      PASS testcases/cov.TestAdd
+      PASS testcases/cov  {100.0%}
 ════════════ COVR ════════════
 100.0% testcases/cov
 
@@ -555,8 +555,8 @@ TestAttr
 			wantOutput: `
 *****
 ════════════ FAIL ════════════
-  FAIL testcases/mixed.TestMixed
-  FAIL testcases/mixed
+      FAIL testcases/mixed.TestMixed
+      FAIL testcases/mixed
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,
@@ -606,8 +606,8 @@ This is some test output.
 
 === FAIL testcases/mixed
 ════════════ FAIL ════════════
-  FAIL testcases/mixed.TestMixed
-  FAIL testcases/mixed
+      FAIL testcases/mixed.TestMixed
+      FAIL testcases/mixed
 
 ══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
 `,

@@ -77,12 +77,22 @@ func (r *Renderer) PrintHeader() {
 	fmt.Fprintln(r.out(), "*****")
 }
 
+// statusNameWidth is the length of the longest status name, so that the
+// status prefixes of summary lines line up across sections.
+var statusNameWidth = func() int {
+	width := 0
+	for _, name := range statusNames {
+		width = max(width, len(name))
+	}
+	return width
+}()
+
 func (r *Renderer) statusHeader(status Status) (hr, header, prefix string) {
 	statusColor := statusColors[status]
 	statusBold := statusColorsBold[status]
 	header = statusBold(statusNames[status])
 	hr = statusColor("════════════")
-	prefix = statusColor(fmt.Sprintf("%6s ", statusNames[status]))
+	prefix = statusColor(fmt.Sprintf("%*s ", statusNameWidth, statusNames[status]))
 	return hr, header, prefix
 }
 
@@ -125,7 +135,6 @@ loop:
 		filteredEvents = append(filteredEvents, e)
 	}
 
-	es.SortByTime()
 	status := es.Status()
 	numberEvents := len(filteredEvents)
 	if numberEvents == 0 && flags.HideEmptyResults.Any(status) {
@@ -185,9 +194,11 @@ loop:
 		if flags.V >= V3 {
 			ss = append(ss, fmt.Sprintf("%7s", e.Action), e.Time.Format("15:04:05.999"))
 		}
-		colorFn := r.eventTextColor(e, status, hasOutputType, textColor)
-		ss = append(ss, colorFn(strings.TrimSuffix(e.Text(), "\n")), "\n")
-		fmt.Fprint(w, strings.Join(ss, " "))
+		if text := strings.TrimSuffix(e.Text(), "\n"); text != "" {
+			colorFn := r.eventTextColor(e, status, hasOutputType, textColor)
+			ss = append(ss, colorFn(text))
+		}
+		fmt.Fprintln(w, strings.Join(ss, " "))
 	}
 	if len(filteredEvents) > 0 {
 		fmt.Fprintln(w, "")

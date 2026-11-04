@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
@@ -263,12 +262,6 @@ func (es Events) FindFirstByAction(actions ...Action) *Event {
 		}
 	}
 	return nil
-}
-
-func (es Events) SortByTime() {
-	sort.SliceStable(es, func(i, j int) bool {
-		return es[i].Time.Before(es[j].Time)
-	})
 }
 
 // Compact removes events that are boilerplate / uninteresting for printing
