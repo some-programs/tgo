@@ -1133,3 +1133,51 @@ artifacts: /tmp/_artifacts/a/TestA/1
 		t.Errorf("output mismatch:\n--- GOT ---\n%s\n--- WANT ---\n%s", got, want)
 	}
 }
+
+func TestListRequested(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{nil, false},
+		{[]string{"./..."}, false},
+		{[]string{"-list", "."}, true},
+		{[]string{"-list=Test"}, true},
+		{[]string{"--list", "."}, true},
+		{[]string{"-test.list=."}, true},
+		{[]string{"-run", "list"}, false},
+		{[]string{"./...", "-args", "-list", "."}, false},
+	}
+	for _, tt := range tests {
+		if got := listRequested(tt.args); got != tt.want {
+			t.Errorf("listRequested(%q) = %v, want %v", tt.args, got, tt.want)
+		}
+	}
+}
+
+func TestParseFlag(t *testing.T) {
+	t.Parallel()
+	type result struct {
+		name, value     string
+		hasValue, isArg bool
+	}
+	tests := []struct {
+		arg  string
+		want result
+	}{
+		{"-v", result{"v", "", false, true}},
+		{"--v", result{"v", "", false, true}},
+		{"-run=TestA", result{"run", "TestA", true, true}},
+		{"-run=a=b", result{"run", "a=b", true, true}},
+		{"-cover=", result{"cover", "", true, true}},
+		{"./...", result{}},
+		{"TestA", result{}},
+	}
+	for _, tt := range tests {
+		name, value, hasValue, ok := parseFlag(tt.arg)
+		if got := (result{name, value, hasValue, ok}); got != tt.want {
+			t.Errorf("parseFlag(%q) = %+v, want %+v", tt.arg, got, tt.want)
+		}
+	}
+}

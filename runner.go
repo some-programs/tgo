@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,10 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 	defer cancel()
 
 	coverEnabled := coverageRequested(argv)
+	if listRequested(argv) && !flags.Results.Any(StatusPass) {
+		// go test -list prints the names as output of the passing package.
+		flags.Results = append(slices.Clone(flags.Results), StatusPass)
+	}
 
 	args := append([]string{"test", "-json"}, goTestArgs(argv)...)
 	log.Println("args", args)
@@ -94,6 +99,20 @@ func goTestArgs(argv []string) []string {
 	return args
 }
 
+// listRequested reports whether the go test arguments include -list.
+// Arguments after -args are for the test binary and are ignored.
+func listRequested(argv []string) bool {
+	for _, arg := range argv {
+		if isArgsFlag(arg) {
+			break
+		}
+		if name, _, _, ok := parseFlag(arg); ok && (name == "list" || name == "test.list") {
+			return true
+		}
+	}
+	return false
+}
+
 // coverageRequested reports whether the go test arguments enable coverage:
 // -cover, or any of -covermode, -coverpkg and -coverprofile, which imply it.
 // Arguments after -args are for the test binary and are ignored.
@@ -103,11 +122,10 @@ func coverageRequested(argv []string) bool {
 		if isArgsFlag(arg) {
 			break
 		}
-		flag, ok := strings.CutPrefix(arg, "-")
+		name, value, hasValue, ok := parseFlag(arg)
 		if !ok {
 			continue
 		}
-		name, value, hasValue := strings.Cut(strings.TrimPrefix(flag, "-"), "=")
 		switch name {
 		case "cover":
 			enabled = !hasValue || value != "false"

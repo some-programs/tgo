@@ -534,6 +534,20 @@ func TestFullProgram_CLI(t *testing.T) {
 `,
 		},
 		{
+			name:    "List",
+			args:    []string{"-list", ".", "./attr"},
+			wantErr: false,
+			wantOutput: `
+*****
+=== PASS testcases/attr
+
+TestAttr
+
+
+══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
 			name:    "V_KeepsResults",
 			args:    []string{"-v", "./mixed"},
 			env:     []string{"TGO_RESULTS=none"},

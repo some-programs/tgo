@@ -141,12 +141,8 @@ func verboseRequested(args []string) bool {
 // forms (-v, --v, -v=true, -test.v, ...), and whether it enables verbose
 // output.
 func parseVerboseFlag(arg string) (isV, on bool) {
-	name, ok := strings.CutPrefix(arg, "-")
-	if !ok {
-		return false, false
-	}
-	name, value, hasValue := strings.Cut(strings.TrimPrefix(name, "-"), "=")
-	if name != "v" && name != "test.v" {
+	name, value, hasValue, ok := parseFlag(arg)
+	if !ok || (name != "v" && name != "test.v") {
 		return false, false
 	}
 	if !hasValue {
@@ -154,6 +150,17 @@ func parseVerboseFlag(arg string) (isV, on bool) {
 	}
 	on, err := strconv.ParseBool(value)
 	return true, err == nil && on
+}
+
+// parseFlag splits a command-line flag of the form -name, --name or
+// -name=value. ok is false if arg is not a flag.
+func parseFlag(arg string) (name, value string, hasValue, ok bool) {
+	flag, ok := strings.CutPrefix(arg, "-")
+	if !ok {
+		return "", "", false, false
+	}
+	name, value, hasValue = strings.Cut(strings.TrimPrefix(flag, "-"), "=")
+	return name, value, hasValue, true
 }
 
 // isArgsFlag reports whether arg is go test's -args flag, after which all
