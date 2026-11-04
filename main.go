@@ -26,7 +26,7 @@ func main() {
 		ff.WithConfigFileFlag("config"),
 		ff.WithConfigFileParser(ff.PlainParser),
 	); err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -49,14 +49,14 @@ func main() {
 	log.Printf("flags %+v", flags)
 	log.Printf("args: %+v", os.Args)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 
 	if err := run(ctx, flags, os.Args[1:]); err != nil {
 		if ee, ok := errors.AsType[ExitError](err); ok {
 			os.Exit(int(ee))
 		}
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

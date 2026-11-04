@@ -144,6 +144,20 @@ func TestFlaky(t *testing.T) {
 }
 `),
 	},
+	"failcount/failcount_test.go": {
+		Data: []byte(`package failcount
+
+import "testing"
+
+var runs int
+
+// TestFailEachRun fails on every run (-count=N) with a different message.
+func TestFailEachRun(t *testing.T) {
+	runs++
+	t.Errorf("failure in run %d", runs)
+}
+`),
+	},
 	"benchfail/benchfail_test.go": {
 		Data: []byte(`package benchfail
 

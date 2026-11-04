@@ -58,7 +58,6 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 	defer stdout.Close()
 
 	if err := cmd.Start(); err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -136,6 +135,12 @@ func coverageRequested(argv []string) bool {
 	return enabled
 }
 
+// printState records how a key's result was handled by processEvents.
+type printState struct {
+	status Status // status of the last handled result
+	n      int    // number of the key's events handled so far
+}
+
 func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bool, t0 time.Time) error {
 	if renderer == nil {
 		renderer = defaultRenderer
@@ -143,18 +148,32 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 	w := renderer.out()
 
 	tests := make(TestStorage)
-	// printed holds the status each key was last printed with. A key is
-	// printed again if a later run (go test -count=N) changes its status.
-	printed := make(map[Key]Status)
+	// printed holds the keys whose results have been handled, whether or
+	// not they were shown.
+	printed := make(map[Key]printState)
 	// runningBench holds the most recently started benchmark per package.
 	runningBench := make(map[string]string)
 	scanner := bufio.NewScanner(r)
 
-	printIfChanged := func(key Key) {
-		status := tests[key].Status()
-		if status != StatusNone && printed[key] != status && flags.Results.Any(status) {
-			renderer.PrintDetail(tests[key], flags)
-			printed[key] = status
+	// printFinished prints the result of key after a terminal event.
+	//
+	// A test runs once per -count, so each run is printed with its own
+	// events. A package reports once, but a build failure has two terminal
+	// events (build-fail and fail), so a package is printed again only if its
+	// status changes.
+	printFinished := func(key Key) {
+		events := tests[key]
+		p := printed[key]
+		if key.Test != "" {
+			events = events[p.n:]
+		}
+		status := events.Status()
+		if status == StatusNone || (key.Test == "" && status == p.status) {
+			return
+		}
+		printed[key] = printState{status: status, n: len(tests[key])}
+		if flags.Results.Any(status) {
+			renderer.PrintDetail(events, flags)
 		}
 	}
 
@@ -177,10 +196,10 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 		}
 		if e.Test == "" {
 			for _, k := range tests.FinishBenchmarks(e, runningBench[key.Package]) {
-				printIfChanged(k)
+				printFinished(k)
 			}
 		}
-		printIfChanged(key)
+		printFinished(key)
 	}
 
 	if len(tests) > 0 {
@@ -194,7 +213,7 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 				FindByStatus(StatusNone)
 			for _, key := range noneTests.OrderedKeys() {
 				renderer.PrintDetail(tests[key], flags)
-				printed[key] = StatusNone
+				printed[key] = printState{status: StatusNone, n: len(tests[key])}
 			}
 		}
 

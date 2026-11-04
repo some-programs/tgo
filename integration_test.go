@@ -274,6 +274,37 @@ BUILD FAIL testcases/buildfail
 `,
 		},
 		{
+			name: "Fail_Count3",
+			args: []string{"-count=3", "./failcount"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{StatusFail, StatusNone},
+				Summary: Statuses{StatusFail, StatusNone},
+			},
+			wantErr: true,
+			wantOutput: `
+*****
+=== FAIL testcases/failcount.TestFailEachRun
+
+    failcount_test.go:10: failure in run 1
+
+=== FAIL testcases/failcount.TestFailEachRun
+
+    failcount_test.go:10: failure in run 2
+
+=== FAIL testcases/failcount.TestFailEachRun
+
+    failcount_test.go:10: failure in run 3
+
+=== FAIL testcases/failcount
+════════════ FAIL ════════════
+      FAIL testcases/failcount.TestFailEachRun
+      FAIL testcases/failcount
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
 			name: "Bench_Fail",
 			args: []string{"-bench", ".", "./benchfail"},
 			// Details are not shown: they include the CPU model.
