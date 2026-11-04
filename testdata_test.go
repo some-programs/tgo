@@ -212,6 +212,17 @@ func TestInterrupt(t *testing.T) {
 }
 `),
 	},
+	"attr/attr_test.go": {
+		Data: []byte(`package attr
+
+import "testing"
+
+func TestAttr(t *testing.T) {
+	t.Attr("issue", "123")
+	t.Log("hello")
+}
+`),
+	},
 	"mixed/mixed_test.go": {
 		Data: []byte(`package mixed
 

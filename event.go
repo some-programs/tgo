@@ -54,11 +54,14 @@ var (
 	ActionFinish      = Action("finish")
 	ActionBuildOutput = Action("build-output")
 	ActionBuildFail   = Action("build-fail")
+	ActionAttr        = Action("attr")      // t.Attr, new in go 1.25
+	ActionArtifacts   = Action("artifacts") // t.ArtifactDir with -artifacts, new in go 1.26
 
 	AllActions = Actions{
 		ActionRun, ActionPause, ActionCont, ActionPass,
 		ActionBench, ActionFail, ActionOutput, ActionSkip,
 		ActionStart, ActionFinish, ActionBuildOutput, ActionBuildFail,
+		ActionAttr, ActionArtifacts,
 	}
 
 	EndingActions = Actions{ActionFail, ActionSkip, ActionPass, ActionBench, ActionBuildFail}
@@ -156,6 +159,21 @@ type Event struct {
 	Output      string     `json:"Output,omitempty"`
 	OutputType  OutputType `json:"OutputType,omitempty"`  // new in go 1.27
 	FailedBuild string     `json:"FailedBuild,omitempty"` // package ID of the package that failed to build
+	AttrKey     string     `json:"Key,omitempty"`         // attribute key, for ActionAttr
+	AttrValue   string     `json:"Value,omitempty"`       // attribute value, for ActionAttr
+	Path        string     `json:"Path,omitempty"`        // artifact directory, for ActionArtifacts
+}
+
+// Text returns the text to display for the event: the output of an output
+// event, or a description of an attribute or artifact directory.
+func (e Event) Text() string {
+	switch e.Action {
+	case ActionAttr:
+		return "attr: " + e.AttrKey + "=" + e.AttrValue + "\n"
+	case ActionArtifacts:
+		return "artifacts: " + e.Path + "\n"
+	}
+	return e.Output
 }
 
 func (e Event) IsFrame() bool {

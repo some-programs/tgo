@@ -339,6 +339,27 @@ BUILD FAIL testcases/xtestfail
 `,
 		},
 		{
+			name: "Attr",
+			args: []string{"./attr"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{StatusPass},
+				Summary: Statuses{},
+			},
+			wantErr: false,
+			wantOutput: `
+*****
+=== PASS testcases/attr.TestAttr
+
+attr: issue=123
+    attr_test.go:7: hello
+
+=== PASS testcases/attr
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
 			name: "Verbose_V4",
 			args: []string{"./output"},
 			flags: Flags{

@@ -1097,3 +1097,39 @@ func TestCoverageRequested(t *testing.T) {
 		}
 	}
 }
+
+func TestEvent_AttrArtifacts(t *testing.T) {
+	t.Parallel()
+	input := `{"Action":"run","Package":"ex/a","Test":"TestA"}
+{"Action":"attr","Package":"ex/a","Test":"TestA","Key":"issue","Value":"123"}
+{"Action":"output","Package":"ex/a","Test":"TestA","Output":"=== ATTR  TestA issue 123\n","OutputType":"frame"}
+{"Action":"artifacts","Package":"ex/a","Test":"TestA","Path":"/tmp/_artifacts/a/TestA/1"}
+{"Action":"output","Package":"ex/a","Test":"TestA","Output":"=== ARTIFACTS TestA /tmp/_artifacts/a/TestA/1\n","OutputType":"frame"}
+{"Action":"fail","Package":"ex/a","Test":"TestA"}
+`
+	var e Event
+	if err := json.Unmarshal([]byte(strings.SplitN(input, "\n", 3)[1]), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.AttrKey != "issue" || e.AttrValue != "123" {
+		t.Errorf("attr event decoded as Key=%q Value=%q", e.AttrKey, e.AttrValue)
+	}
+
+	var sb strings.Builder
+	flags := Flags{Results: Statuses{StatusFail}}
+	if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), false, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got := normalizeOutput(sb.String())
+	want := `*****
+=== FAIL ex/a.TestA
+
+attr: issue=123
+artifacts: /tmp/_artifacts/a/TestA/1
+
+
+══════ 12:00:00 | PASS:0 | FAIL:1 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════`
+	if got != want {
+		t.Errorf("output mismatch:\n--- GOT ---\n%s\n--- WANT ---\n%s", got, want)
+	}
+}
