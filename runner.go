@@ -26,16 +26,15 @@ func run(ctx context.Context, flags Flags, argv []string) error {
 	return runWithRenderer(ctx, flags, defaultRenderer, argv)
 }
 
-func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv []string) error {
-	ctx, cancel := context.WithCancel(ctx)
+// exitInterrupted is the exit status used when tgo is interrupted, as for a
+// process killed by SIGINT.
+const exitInterrupted = ExitError(130)
+
+func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, argv []string) error {
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
-	var coverEnabled bool
-	for _, v := range argv {
-		if v == "-cover" || strings.HasPrefix(v, "-coverprofile") || strings.HasPrefix(v, "-coverpkg") {
-			coverEnabled = true
-		}
-	}
+	coverEnabled := coverageRequested(argv)
 
 	args := []string{"test", "-json"}
 	for _, v := range argv {
@@ -51,6 +50,7 @@ func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv 
 		cmd.Dir = flags.Dir
 	}
 	cmd.Stderr = os.Stderr
+	interruptDone := setupInterrupt(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -69,6 +69,10 @@ func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv 
 	}
 
 	cmdErr := cmd.Wait()
+	interruptDone()
+	if parent.Err() != nil {
+		return exitInterrupted
+	}
 	var ee *exec.ExitError
 	if cmdErr != nil && errors.As(cmdErr, &ee) {
 		if ee.Exited() {
@@ -77,6 +81,30 @@ func runWithRenderer(ctx context.Context, flags Flags, renderer *Renderer, argv 
 		return cmdErr
 	}
 	return nil
+}
+
+// coverageRequested reports whether the go test arguments enable coverage:
+// -cover, or any of -covermode, -coverpkg and -coverprofile, which imply it.
+// Arguments after -args are for the test binary and are ignored.
+func coverageRequested(argv []string) bool {
+	enabled := false
+	for _, arg := range argv {
+		if arg == "-args" || arg == "--args" {
+			break
+		}
+		flag, ok := strings.CutPrefix(arg, "-")
+		if !ok {
+			continue
+		}
+		name, value, hasValue := strings.Cut(strings.TrimPrefix(flag, "-"), "=")
+		switch name {
+		case "cover":
+			enabled = !hasValue || value != "false"
+		case "covermode", "coverpkg", "coverprofile":
+			enabled = true
+		}
+	}
+	return enabled
 }
 
 func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bool, t0 time.Time) error {

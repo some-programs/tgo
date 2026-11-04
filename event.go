@@ -320,7 +320,10 @@ func isIgnoredEvent(e Event, passedAt, failedAt, skippedAt float64) bool {
 			output == "FAIL\n" ||
 			output == "testing: warning: no tests to run\n" ||
 			strings.HasPrefix(outputWS, fmt.Sprintf("FAIL\t%s\t", e.Package)) ||
-			(strings.HasPrefix(outputWS, "coverage:") && strings.HasSuffix(outputWS, "of statements")) {
+			outputWS == "coverage: [no statements]" {
+			return true
+		}
+		if _, ok := e.coverage(); ok {
 			return true
 		}
 	}
@@ -328,34 +331,56 @@ func isIgnoredEvent(e Event, passedAt, failedAt, skippedAt float64) bool {
 	return false
 }
 
+// IsPackageWithoutTest reports whether the events belong to a package
+// without test files.
 func (es Events) IsPackageWithoutTest() bool {
 	for _, e := range es {
+		if e.Action != ActionOutput || e.Package == "" || e.Test != "" {
+			continue
+		}
 		output := strings.TrimLeft(e.Output, " ")
-		if e.Action == ActionOutput && e.Package != "" && e.Test == "" &&
-			strings.HasSuffix(output, "[no test files]\n") {
+		if strings.HasSuffix(output, "[no test files]\n") {
+			return true
+		}
+		// With -cover, a package without test files reports its coverage
+		// instead: "\tpkg\t\tcoverage: 0.0% of statements".
+		if strings.HasPrefix(output, "\t"+e.Package+"\t\tcoverage: ") {
 			return true
 		}
 	}
 	return false
 }
 
+// FindCoverage returns the coverage percentage reported for a package, such
+// as "66.7%", or "" if there is none.
 func (es Events) FindCoverage() string {
-	if len(es) == 0 {
-		return ""
-	}
-	if es[0].Package == "" || es[0].Test != "" {
-		return ""
-	}
-	for _, event := range es {
-		if event.Action != ActionOutput {
-			continue
-		}
-		output := strings.TrimSpace(event.Output)
-		if strings.HasPrefix(output, "coverage: ") && strings.HasSuffix(output, " of statements") {
-			output = strings.TrimPrefix(output, "coverage:")
-			output = strings.TrimSuffix(output, "of statements")
-			return strings.TrimSpace(output)
+	for _, e := range es {
+		if pct, ok := e.coverage(); ok {
+			return pct
 		}
 	}
 	return ""
+}
+
+// coverage returns the percentage from a package-level coverage line. These
+// have the forms
+//
+//	coverage: 66.7% of statements
+//	coverage: 66.7% of statements in ./...   (with -coverpkg)
+//	\tpkg\t\tcoverage: 0.0% of statements     (package without test files)
+func (e Event) coverage() (string, bool) {
+	if e.Action != ActionOutput || e.Package == "" || e.Test != "" {
+		return "", false
+	}
+	line := strings.TrimSpace(e.Output)
+	line = strings.TrimPrefix(line, e.Package+"\t\t")
+	rest, ok := strings.CutPrefix(line, "coverage: ")
+	if !ok {
+		return "", false
+	}
+	pct, tail, ok := strings.Cut(rest, " of statements")
+	if !ok || (tail != "" && !strings.HasPrefix(tail, " in ")) {
+		return "", false
+	}
+	return pct, true
 }

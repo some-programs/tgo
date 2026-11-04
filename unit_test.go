@@ -945,3 +945,72 @@ func TestTestStorage_FinishBenchmarks(t *testing.T) {
 		}
 	})
 }
+
+func TestEvents_FindCoverage_Formats(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		output string
+		want   string
+		noTest bool
+	}{
+		{"Cover", "coverage: 66.7% of statements\n", "66.7%", false},
+		{"CoverPkg", "coverage: 66.7% of statements in ./...\n", "66.7%", false},
+		{"NoTestFiles", "\tex/p\t\tcoverage: 0.0% of statements\n", "0.0%", true},
+		{"NoStatements", "coverage: [no statements]\n", "", false},
+		{"OtherText", "coverage: 66.7% of statements, roughly\n", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			es := Events{{Action: ActionOutput, Package: "ex/p", Output: tt.output}}
+			if got := es.FindCoverage(); got != tt.want {
+				t.Errorf("FindCoverage() = %q, want %q", got, tt.want)
+			}
+			if got := es.IsPackageWithoutTest(); got != tt.noTest {
+				t.Errorf("IsPackageWithoutTest() = %v, want %v", got, tt.noTest)
+			}
+			wantIgnored := tt.name != "OtherText"
+			if got := isIgnoredEvent(es[0], 0, 0, 0); got != wantIgnored {
+				t.Errorf("isIgnoredEvent() = %v, want %v", got, wantIgnored)
+			}
+		})
+	}
+
+	t.Run("TestOutputIgnored", func(t *testing.T) {
+		t.Parallel()
+		es := Events{{Action: ActionOutput, Package: "ex/p", Test: "TestX", Output: "coverage: 50.0% of statements\n"}}
+		if got := es.FindCoverage(); got != "" {
+			t.Errorf("FindCoverage() = %q for test output, want \"\"", got)
+		}
+	})
+}
+
+func TestCoverageRequested(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{nil, false},
+		{[]string{"./..."}, false},
+		{[]string{"-cover"}, true},
+		{[]string{"--cover"}, true},
+		{[]string{"-cover=true"}, true},
+		{[]string{"-cover=false"}, false},
+		{[]string{"-cover", "-cover=false"}, false},
+		{[]string{"-covermode=atomic"}, true},
+		{[]string{"-covermode", "atomic"}, true},
+		{[]string{"-coverpkg=./..."}, true},
+		{[]string{"-coverprofile=c.out"}, true},
+		{[]string{"-coverprofile", "c.out"}, true},
+		{[]string{"cover"}, false},
+		{[]string{"-run", "TestCover"}, false},
+		{[]string{"./...", "-args", "-cover"}, false},
+	}
+	for _, tt := range tests {
+		if got := coverageRequested(tt.args); got != tt.want {
+			t.Errorf("coverageRequested(%q) = %v, want %v", tt.args, got, tt.want)
+		}
+	}
+}

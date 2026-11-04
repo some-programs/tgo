@@ -98,6 +98,14 @@ func Add(a, b int) int {
 }
 `),
 	},
+	"nocov/nocov.go": {
+		Data: []byte(`package nocov
+
+func Sub(a, b int) int {
+	return a - b
+}
+`),
+	},
 	"cov/cov_test.go": {
 		Data: []byte(`package cov
 
@@ -177,6 +185,30 @@ import "testing"
 
 func TestX(t *testing.T) {
 	undefined()
+}
+`),
+	},
+	"interrupt/interrupt_test.go": {
+		Data: []byte(`package interrupt
+
+import (
+	"os"
+	"strconv"
+	"testing"
+	"time"
+)
+
+// TestInterrupt writes its pid to a file so the caller knows it is running,
+// then waits to be interrupted.
+func TestInterrupt(t *testing.T) {
+	if err := os.WriteFile("pid.tmp", []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename("pid.tmp", "pid"); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("waiting")
+	time.Sleep(time.Minute)
 }
 `),
 	},

@@ -156,6 +156,58 @@ func TestFullProgram(t *testing.T) {
 `,
 		},
 		{
+			name: "Coverage_NoTestFiles",
+			args: []string{"-cover", "./cov", "./nocov"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{},
+				Summary: Statuses{},
+			},
+			wantErr: false,
+			wantOutput: `
+*****
+════════════ COVR ════════════
+100.0% testcases/cov
+  0.0% testcases/nocov
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name: "Coverage_CoverPkg",
+			args: []string{"-coverpkg=./cov", "./cov"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{},
+				Summary: Statuses{},
+			},
+			wantErr: false,
+			wantOutput: `
+*****
+════════════ COVR ════════════
+100.0% testcases/cov
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
+			name: "Coverage_CoverMode",
+			args: []string{"-covermode=atomic", "./cov"},
+			flags: Flags{
+				Bin:     "go",
+				Results: Statuses{},
+				Summary: Statuses{},
+			},
+			wantErr: false,
+			wantOutput: `
+*****
+════════════ COVR ════════════
+100.0% testcases/cov
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════
+`,
+		},
+		{
 			name: "Crash",
 			args: []string{"./crash"},
 			flags: Flags{
