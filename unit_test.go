@@ -1033,7 +1033,7 @@ func TestRenderer_SummaryPrefixAligned(t *testing.T) {
 	r.PrintSummary(ts.FindByStatus(StatusBuildFail), StatusBuildFail)
 
 	columns := map[string]int{}
-	for _, line := range strings.Split(sb.String(), "\n") {
+	for line := range strings.SplitSeq(sb.String(), "\n") {
 		for _, pkg := range []string{"ex/a", "ex/b"} {
 			if i := strings.Index(line, pkg); i >= 0 {
 				columns[pkg] = i
