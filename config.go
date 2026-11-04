@@ -190,7 +190,7 @@ func (ss *Statuses) String() string {
 
 // Set implements flag.Value for Statuses.
 func (ss *Statuses) Set(value string) error {
-	value = strings.ToLower(value)
+	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
 	case "-":
 		*ss = make([]Status, 0)
@@ -200,9 +200,12 @@ func (ss *Statuses) Set(value string) error {
 		copy(*ss, AllStatuses)
 		return nil
 	}
-	split := strings.Split(value, ",")
 	var statuses Statuses
-	for _, v := range split {
+	for v := range strings.SplitSeq(value, ",") {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
 		if !AllStatuses.Any(Status(v)) {
 			return fmt.Errorf("%s is not a valid status", v)
 		}

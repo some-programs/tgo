@@ -35,7 +35,6 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
-	coverEnabled := coverageRequested(argv)
 	if listRequested(argv) && !flags.Results.Any(StatusPass) {
 		// go test -list prints the names as output of the passing package.
 		flags.Results = append(slices.Clone(flags.Results), StatusPass)
@@ -62,9 +61,12 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 	}
 
 	t0 := time.Now()
-	if err := processEvents(stdout, flags, renderer, coverEnabled, t0); err != nil {
+	if err := processEvents(stdout, flags, renderer, t0); err != nil {
 		log.Println("process error:", err)
 	}
+	// Drain what processEvents left unread, so go test can't block writing
+	// to a full pipe and keep cmd.Wait from returning.
+	_, _ = io.Copy(io.Discard, stdout)
 
 	cmdErr := cmd.Wait()
 	interruptDone()
@@ -112,36 +114,13 @@ func listRequested(argv []string) bool {
 	return false
 }
 
-// coverageRequested reports whether the go test arguments enable coverage:
-// -cover, or any of -covermode, -coverpkg and -coverprofile, which imply it.
-// Arguments after -args are for the test binary and are ignored.
-func coverageRequested(argv []string) bool {
-	enabled := false
-	for _, arg := range argv {
-		if isArgsFlag(arg) {
-			break
-		}
-		name, value, hasValue, ok := parseFlag(arg)
-		if !ok {
-			continue
-		}
-		switch name {
-		case "cover":
-			enabled = !hasValue || value != "false"
-		case "covermode", "coverpkg", "coverprofile":
-			enabled = true
-		}
-	}
-	return enabled
-}
-
 // printState records how a key's result was handled by processEvents.
 type printState struct {
 	status Status // status of the last handled result
 	n      int    // number of the key's events handled so far
 }
 
-func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bool, t0 time.Time) error {
+func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) error {
 	if renderer == nil {
 		renderer = defaultRenderer
 	}
@@ -183,7 +162,11 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 		var e Event
 		log.Println("LINE:", scanner.Text())
 		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
-			log.Println("scanner error", err)
+			// Not an event, such as output of a -exec program: show it as is.
+			log.Println("unmarshal error:", err)
+			if line := scanner.Text(); strings.TrimSpace(line) != "" {
+				fmt.Fprintln(w, line)
+			}
 			continue
 		}
 		tests.Append(e)
@@ -228,18 +211,15 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, coverEnabled bo
 			}
 		}
 
-		if coverEnabled {
-			filtered := tests.WithCoverage()
-			if len(filtered) > 0 {
-				renderer.PrintCoverage(filtered)
-			}
+		if covered := tests.WithCoverage(); len(covered) > 0 {
+			renderer.PrintCoverage(covered)
 		}
 
 		renderer.PrintFooter(tests, t0)
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(w, "error reading standard input:", err)
+		fmt.Fprintln(w, "error reading go test output:", err)
 		return err
 	}
 

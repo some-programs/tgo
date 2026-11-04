@@ -297,6 +297,13 @@ func TestStatuses_Methods(t *testing.T) {
 			t.Errorf("unexpected statuses: %v", sss)
 		}
 
+		if err := sss.Set(" fail, pass ,"); err != nil {
+			t.Fatalf("Set with spaces failed: %v", err)
+		}
+		if len(sss) != 2 || sss[0] != StatusFail || sss[1] != StatusPass {
+			t.Errorf("unexpected statuses: %v", sss)
+		}
+
 		if err := sss.Set("invalid"); err == nil {
 			t.Error("expected error for invalid status")
 		}
@@ -809,13 +816,36 @@ func TestProcessEvents(t *testing.T) {
 		Results: Statuses{StatusPass},
 		Summary: Statuses{StatusPass},
 	}
-	err := processEvents(strings.NewReader(input), flags, r, false, time.Now())
+	err := processEvents(strings.NewReader(input), flags, r, time.Now())
 	if err != nil {
 		t.Fatalf("processEvents returned error: %v", err)
 	}
 	got := sb.String()
 	if !strings.Contains(got, "my/pkg.TestFoo") {
 		t.Errorf("expected test name in output, got: %s", got)
+	}
+}
+
+func TestProcessEvents_NonJSONLine(t *testing.T) {
+	t.Parallel()
+	input := `{"Action":"run","Package":"my/pkg","Test":"TestFoo"}
+not an event
+
+{"Action":"pass","Package":"my/pkg","Test":"TestFoo"}
+`
+	var sb strings.Builder
+	flags := Flags{Results: Statuses{StatusPass}}
+	if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got := normalizeOutput(sb.String())
+	want := `*****
+not an event
+=== PASS my/pkg.TestFoo
+
+══════ 12:00:00 | PASS:1 | FAIL:0 | BUILD FAIL:0 | NONE:0 | SKIP:0 | 0ms  ══════`
+	if got != want {
+		t.Errorf("output mismatch:\n--- GOT ---\n%s\n--- WANT ---\n%s", got, want)
 	}
 }
 
@@ -1056,35 +1086,6 @@ func TestEvents_FindCoverage_Formats(t *testing.T) {
 	})
 }
 
-func TestCoverageRequested(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		args []string
-		want bool
-	}{
-		{nil, false},
-		{[]string{"./..."}, false},
-		{[]string{"-cover"}, true},
-		{[]string{"--cover"}, true},
-		{[]string{"-cover=true"}, true},
-		{[]string{"-cover=false"}, false},
-		{[]string{"-cover", "-cover=false"}, false},
-		{[]string{"-covermode=atomic"}, true},
-		{[]string{"-covermode", "atomic"}, true},
-		{[]string{"-coverpkg=./..."}, true},
-		{[]string{"-coverprofile=c.out"}, true},
-		{[]string{"-coverprofile", "c.out"}, true},
-		{[]string{"cover"}, false},
-		{[]string{"-run", "TestCover"}, false},
-		{[]string{"./...", "-args", "-cover"}, false},
-	}
-	for _, tt := range tests {
-		if got := coverageRequested(tt.args); got != tt.want {
-			t.Errorf("coverageRequested(%q) = %v, want %v", tt.args, got, tt.want)
-		}
-	}
-}
-
 func TestEvent_AttrArtifacts(t *testing.T) {
 	t.Parallel()
 	input := `{"Action":"run","Package":"ex/a","Test":"TestA"}
@@ -1104,7 +1105,7 @@ func TestEvent_AttrArtifacts(t *testing.T) {
 
 	var sb strings.Builder
 	flags := Flags{Results: Statuses{StatusFail}}
-	if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), false, time.Now()); err != nil {
+	if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	got := normalizeOutput(sb.String())
@@ -1180,7 +1181,7 @@ func TestRenderer_NoTrailingWhitespace(t *testing.T) {
 	for _, v := range []Verbosity{V0, V3, V4} {
 		var sb strings.Builder
 		flags := Flags{V: v, Results: Statuses{StatusFail}, Summary: Statuses{StatusFail}}
-		if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), false, time.Now()); err != nil {
+		if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		for i, line := range strings.Split(sb.String(), "\n") {
