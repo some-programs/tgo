@@ -43,7 +43,7 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 	fs.Var(&f.Results, "results", "types of results to show")
 	fs.Var(&f.Summary, "summary", "types of summary to show")
 	fs.Var(&f.HideEmptyResults, "res-hide", "hide empty results")
-	fs.IntVar((*int)(&f.V), "v", 0, "0(lowest) to 5(highest)")
+	fs.IntVar((*int)(&f.V), "v", 0, "0(lowest) to 4(highest)")
 	fs.StringVar(&f.Config, "config", "", "config file")
 	fs.BoolVar(&f.All, "all", false, "show mostly everything")
 	fs.BoolVar(&f.PrintConfig, "print_config", false, "print config")
@@ -62,7 +62,7 @@ settings:
   doesn't clash with other arguments.
 
   TGO_ALL=1         show mostly everything
-  TGO_V=0           verbosity: 0(lowest) to 5(highest)
+  TGO_V=0           verbosity: 0(lowest) to 4(highest)
   TGO_RESULTS       types of results to show
   TGO_SUMMARY       types of summary to show
   TGO_RES_HIDE      types of results to hide when empty
