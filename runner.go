@@ -160,7 +160,9 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 
 	for scanner.Scan() {
 		var e Event
-		log.Println("LINE:", scanner.Text())
+		if flags.V > V3 {
+			log.Println("LINE:", scanner.Text())
+		}
 		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
 			// Not an event, such as output of a -exec program: show it as is.
 			log.Println("unmarshal error:", err)
