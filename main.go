@@ -49,7 +49,7 @@ func main() {
 	log.Printf("flags %+v", flags)
 	log.Printf("args: %+v", os.Args)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	ctx, stop := signal.NotifyContext(context.Background(), interruptSignals()...)
 	defer stop()
 
 	if err := run(ctx, flags, os.Args[1:]); err != nil {
@@ -59,4 +59,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// interruptSignals returns the signals that interrupt a run. SIGHUP is left
+// out when it was ignored at startup, as under nohup, since handling it
+// would stop ignoring it and end the run on a terminal hangup.
+func interruptSignals() []os.Signal {
+	sigs := []os.Signal{os.Interrupt, syscall.SIGTERM}
+	if !signal.Ignored(syscall.SIGHUP) {
+		sigs = append(sigs, syscall.SIGHUP)
+	}
+	return sigs
 }

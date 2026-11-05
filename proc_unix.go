@@ -28,7 +28,7 @@ func setupInterrupt(cmd *exec.Cmd) (done func()) {
 	cmd.Cancel = func() error {
 		pgid := cmd.Process.Pid
 		again := make(chan os.Signal, 1)
-		signal.Notify(again, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+		signal.Notify(again, interruptSignals()...)
 		go func() {
 			defer signal.Stop(again)
 			select {
