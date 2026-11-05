@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"slices"
@@ -140,18 +141,24 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 	// a large value produces a line far beyond the default 64 KB limit.
 	scanner.Buffer(nil, maxLineSize)
 
-	// printFinished prints the result of key after a terminal event.
+	// unhandled returns the events of key that printFinished has not handled.
 	//
-	// A test runs once per -count, so each run is printed with its own
-	// events. A package reports once, but a build failure has two terminal
-	// events (build-fail and fail), so a package is printed again only if its
-	// status changes.
-	printFinished := func(key Key) {
+	// A test runs once per -count, so each run is judged by its own events.
+	// A package reports once, but a build failure has two terminal events
+	// (build-fail and fail), so a package is judged by all its events.
+	unhandled := func(key Key) Events {
 		events := tests[key]
-		p := printed[key]
 		if key.Test != "" {
-			events = events[p.n:]
+			events = events[printed[key].n:]
 		}
+		return events
+	}
+
+	// printFinished prints the result of key after a terminal event. A
+	// package is printed again only if its status changes.
+	printFinished := func(key Key) {
+		events := unhandled(key)
+		p := printed[key]
 		status := events.Status()
 		if status == StatusNone || (key.Test == "" && status == p.status) {
 			return
@@ -194,22 +201,27 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 	}
 
 	if len(tests) > 0 {
-		// Print any non-finished tests if requested
-		if flags.Results.Any(StatusNone) {
-			noneTests := tests.
-				Filter(func(k Key, _ Events) bool {
-					_, ok := printed[k]
-					return !ok
-				}).
-				FindByStatus(StatusNone)
-			for _, key := range noneTests.OrderedKeys() {
-				renderer.PrintDetail(tests[key], flags)
+		// A test that never finished, such as after an interrupt, has status
+		// none. Under -count a test's last run may be unfinished after an
+		// earlier run was reported, so that run alone is shown and stands for
+		// the test in the summaries and the footer.
+		unfinished := make(TestStorage)
+		for key := range tests {
+			if rest := unhandled(key); len(rest) > 0 && rest.Status() == StatusNone {
+				unfinished[key] = rest
 			}
 		}
+		if flags.Results.Any(StatusNone) {
+			for _, key := range unfinished.OrderedKeys() {
+				renderer.PrintDetail(unfinished[key], flags)
+			}
+		}
+		results := maps.Clone(tests)
+		maps.Copy(results, unfinished)
 
 		// Print configured summaries
 		for _, status := range flags.Summary {
-			filtered := tests.FindByStatus(status)
+			filtered := results.FindByStatus(status)
 			if status == StatusSkip && flags.V <= V3 {
 				filtered = filtered.FilterNotests()
 			}
@@ -222,7 +234,7 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 			renderer.PrintCoverage(covered)
 		}
 
-		renderer.PrintFooter(tests, t0)
+		renderer.PrintFooter(results, t0)
 	}
 
 	if err := scanner.Err(); err != nil {

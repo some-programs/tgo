@@ -704,6 +704,44 @@ func TestProcessEvents_LongLine(t *testing.T) {
 	}
 }
 
+// TestProcessEvents_CountInterrupted checks that a test whose later run
+// under -count never finished is reported as unfinished, not by the result
+// of its earlier run.
+func TestProcessEvents_CountInterrupted(t *testing.T) {
+	t.Parallel()
+	input := `{"Action":"start","Package":"my/pkg"}
+{"Action":"run","Package":"my/pkg","Test":"TestFoo"}
+{"Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"=== RUN   TestFoo\n"}
+{"Action":"pass","Package":"my/pkg","Test":"TestFoo"}
+{"Action":"run","Package":"my/pkg","Test":"TestFoo"}
+{"Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"=== RUN   TestFoo\n"}
+{"Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"    foo_test.go:9: second run\n"}
+`
+	var sb strings.Builder
+	flags := Flags{
+		Results: Statuses{StatusPass, StatusNone},
+		Summary: Statuses{StatusPass, StatusNone},
+	}
+	if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got := normalizeOutput(sb.String())
+	want := `*****
+=== PASS my/pkg.TestFoo
+=== NONE my/pkg.TestFoo
+
+    foo_test.go:9: second run
+
+════════════ NONE ════════════
+      NONE my/pkg.TestFoo
+      NONE my/pkg
+
+══════ 12:00:00 | PASS:0 | FAIL:0 | BUILD FAIL:0 | NONE:1 | SKIP:0 | 0ms  ══════`
+	if got != want {
+		t.Errorf("output mismatch:\n--- GOT ---\n%s\n--- WANT ---\n%s", got, want)
+	}
+}
+
 func TestRenderer_EventTextColor(t *testing.T) {
 	t.Parallel()
 	r := NewRenderer(nil)
