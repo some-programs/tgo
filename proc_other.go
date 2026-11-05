@@ -6,6 +6,4 @@ import "os/exec"
 
 // setupInterrupt keeps the default behaviour of killing cmd when its context
 // is cancelled.
-func setupInterrupt(cmd *exec.Cmd) (done func()) {
-	return func() {}
-}
+func setupInterrupt(cmd *exec.Cmd) {}

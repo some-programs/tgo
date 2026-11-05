@@ -49,7 +49,7 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 		cmd.Dir = flags.Dir
 	}
 	cmd.Stderr = os.Stderr
-	interruptDone := setupInterrupt(cmd)
+	setupInterrupt(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -70,7 +70,6 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 	_, _ = io.Copy(io.Discard, stdout)
 
 	cmdErr := cmd.Wait()
-	interruptDone()
 	if parent.Err() != nil {
 		return exitInterrupted
 	}
