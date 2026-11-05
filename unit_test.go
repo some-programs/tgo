@@ -281,6 +281,11 @@ func TestStatuses_Methods(t *testing.T) {
 		if err := sss.Set("invalid"); err == nil {
 			t.Error("expected error for invalid status")
 		}
+		for _, value := range []string{"", " ", ",", " , "} {
+			if err := sss.Set(value); err == nil {
+				t.Errorf("Set(%q): expected error for no statuses", value)
+			}
+		}
 
 		if err := sss.Set("-"); err != nil {
 			t.Fatalf("Set('-') failed: %v", err)

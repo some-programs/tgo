@@ -210,6 +210,9 @@ func (ss *Statuses) Set(value string) error {
 		}
 		statuses = append(statuses, Status(v))
 	}
+	if len(statuses) == 0 {
+		return fmt.Errorf("%q contains no status, use - for none", value)
+	}
 
 	*ss = statuses
 	return nil
