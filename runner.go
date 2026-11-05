@@ -196,7 +196,6 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 				FindByStatus(StatusNone)
 			for _, key := range noneTests.OrderedKeys() {
 				renderer.PrintDetail(tests[key], flags)
-				printed[key] = printState{status: StatusNone, n: len(tests[key])}
 			}
 		}
 
