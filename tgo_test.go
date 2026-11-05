@@ -3,8 +3,18 @@ package main
 import (
 	"context"
 	"io"
+	"os"
 	"testing"
+
+	"github.com/fatih/color"
 )
+
+// TestMain disables color so the expected output is the same whether or
+// not the test binary writes to a terminal, as it does under a bare go test.
+func TestMain(m *testing.M) {
+	color.NoColor = true
+	os.Exit(m.Run())
+}
 
 func TestRun_Pass(t *testing.T) {
 	t.Parallel()
