@@ -683,6 +683,27 @@ not an event
 	}
 }
 
+func TestProcessEvents_LongLine(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("x", 200*1024)
+	input := `{"Action":"run","Package":"my/pkg","Test":"TestFoo"}
+{"Action":"output","Package":"my/pkg","Test":"TestFoo","Output":"` + long + `\n"}
+{"Action":"pass","Package":"my/pkg","Test":"TestFoo"}
+{"Action":"run","Package":"my/pkg","Test":"TestBar"}
+{"Action":"pass","Package":"my/pkg","Test":"TestBar"}
+`
+	var sb strings.Builder
+	flags := Flags{Results: Statuses{StatusPass}}
+	if err := processEvents(strings.NewReader(input), flags, NewRenderer(&sb), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got := normalizeOutput(sb.String())
+	if !strings.Contains(got, long) || !strings.Contains(got, "=== PASS my/pkg.TestBar") ||
+		!strings.Contains(got, "PASS:2") {
+		t.Errorf("output mismatch:\n%s", strings.ReplaceAll(got, long, "<long>"))
+	}
+}
+
 func TestRenderer_EventTextColor(t *testing.T) {
 	t.Parallel()
 	r := NewRenderer(nil)

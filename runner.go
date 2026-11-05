@@ -114,6 +114,9 @@ func listRequested(argv []string) bool {
 	return false
 }
 
+// maxLineSize is the longest line of go test output that is processed.
+const maxLineSize = 1 << 30
+
 // printState records how a key's result was handled by processEvents.
 type printState struct {
 	status Status // status of the last handled result
@@ -133,6 +136,9 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 	// runningBench holds the most recently started benchmark per package.
 	runningBench := make(map[string]string)
 	scanner := bufio.NewScanner(r)
+	// go test -json puts each output line in one event, so a test that logs
+	// a large value produces a line far beyond the default 64 KB limit.
+	scanner.Buffer(nil, maxLineSize)
 
 	// printFinished prints the result of key after a terminal event.
 	//
