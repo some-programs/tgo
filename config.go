@@ -30,6 +30,7 @@ type Flags struct {
 	Summary          Statuses
 	Bin              string
 	Dir              string
+	R                string
 	All              bool
 	PrintConfig      bool
 }
@@ -40,6 +41,7 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 	f.Summary = Statuses{StatusFail, StatusNone, StatusBuildFail}
 
 	fs.StringVar(&f.Bin, "bin", "go", "go binary name")
+	fs.StringVar(&f.R, "r", "", "search subtree for go.mod and run tests in each")
 	fs.Var(&f.Results, "results", "types of results to show")
 	fs.Var(&f.Summary, "summary", "types of summary to show")
 	fs.Var(&f.HideEmptyResults, "res-hide", "hide empty results")
@@ -67,6 +69,7 @@ settings:
   TGO_SUMMARY       types of summary to show
   TGO_RES_HIDE      types of results to hide when empty
   TGO_BIN=go        go binary name
+  TGO_R=path        search subtree for go.mod and run tests in each
   TGO_PRINT_CONFIG  print config on run
 
 `)
@@ -85,8 +88,9 @@ TGO config:
   TGO_RESULTS: %s
   TGO_SUMMARY: %s
   TGO_RES_HIDE: %s
+  TGO_R: %s
 
-`, f.Results.String(), f.Summary.String(), f.HideEmptyResults.String())
+`, f.Results.String(), f.Summary.String(), f.HideEmptyResults.String(), f.R)
 }
 
 // Setup applies overrides based on the go test arguments and configuration.
@@ -166,6 +170,68 @@ func parseFlag(arg string) (name, value string, hasValue, ok bool) {
 // arguments are passed to the test binary.
 func isArgsFlag(arg string) bool {
 	return arg == "-args" || arg == "--args"
+}
+
+// failFastRequested reports whether the go test arguments enable -failfast.
+func failFastRequested(args []string) bool {
+	enabled := false
+	for _, arg := range args {
+		if isArgsFlag(arg) {
+			break
+		}
+		if isFF, on := parseFailFastFlag(arg); isFF {
+			enabled = on
+		}
+	}
+	return enabled
+}
+
+// parseFailFastFlag reports whether arg is go test's -failfast flag in any of its
+// forms (-failfast, --failfast, -failfast=true, -test.failfast, ...), and whether it enables failfast.
+func parseFailFastFlag(arg string) (isFF, on bool) {
+	name, value, hasValue, ok := parseFlag(arg)
+	if !ok || (name != "failfast" && name != "test.failfast") {
+		return false, false
+	}
+	if !hasValue {
+		return true, true
+	}
+	on, err := strconv.ParseBool(value)
+	return true, err == nil && on
+}
+
+var valueTakingTestFlags = map[string]bool{
+	"run": true, "bench": true, "benchtime": true, "count": true,
+	"coverpkg": true, "cpu": true, "list": true, "outputdir": true,
+	"parallel": true, "skip": true, "tags": true, "timeout": true,
+	"vet": true, "exec": true, "o": true, "coverprofile": true,
+	"blockprofile": true, "cpuprofile": true, "memprofile": true,
+	"mutexprofile": true, "trace": true, "test.run": true,
+	"test.bench": true, "test.count": true, "test.timeout": true,
+	"test.list": true, "test.parallel": true, "test.skip": true,
+}
+
+// hasPackageTarget reports whether args contains at least one package or directory argument.
+func hasPackageTarget(args []string) bool {
+	skipNext := false
+	for _, arg := range args {
+		if isArgsFlag(arg) {
+			break
+		}
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			name, _, hasValue, ok := parseFlag(arg)
+			if ok && !hasValue && valueTakingTestFlags[name] {
+				skipNext = true
+			}
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // Any returns true if any of the target statuses exist in ss.

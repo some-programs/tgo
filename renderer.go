@@ -307,3 +307,169 @@ func (r *Renderer) PrintFooter(tests TestStorage, t0 time.Time) {
 
 	fmt.Fprintln(w, status)
 }
+
+// PrintModuleHeader prints the banner before running tests in a module directory.
+func (r *Renderer) PrintModuleHeader(dir string) {
+	w := r.out()
+	fmt.Fprintf(w, "\n%s %s\n", hardLineColor("--->"), attrColor("["+dir+"]"))
+}
+
+// PrintRecursiveSummary renders the aggregated failure summary and final footer for a recursive run.
+func (r *Renderer) PrintRecursiveSummary(results []ModuleRunResult, skippedCount int, t0 time.Time) {
+	w := r.out()
+
+	var failedResults []ModuleRunResult
+	var totalStats TestStats
+
+	for _, res := range results {
+		stats := res.Storage.Stats()
+		totalStats.Pass += stats.Pass
+		totalStats.Fail += stats.Fail
+		totalStats.BuildFail += stats.BuildFail
+		totalStats.None += stats.None
+		totalStats.Skip += stats.Skip
+		if res.Failed() {
+			failedResults = append(failedResults, res)
+		}
+	}
+
+	totalModules := len(results) + skippedCount
+	failedModules := len(failedResults)
+	passedModules := len(results) - failedModules
+
+	if failedModules > 0 {
+		statusColor := statusColors[StatusFail]
+		statusBold := statusColorsBold[StatusFail]
+		hr := statusColor("════════════")
+		headerText := fmt.Sprintf("FAILURES (%d of %d modules failed)", failedModules, totalModules)
+		header := statusBold(headerText)
+		prefix := statusColor(fmt.Sprintf("%*s ", statusNameWidth, statusNames[StatusFail]))
+
+		fmt.Fprintln(w, hr, header, hr)
+
+		for _, res := range failedResults {
+			modFailures := make(TestStorage)
+			for _, st := range []Status{StatusFail, StatusBuildFail} {
+				for k, v := range res.Storage.FindByStatus(st) {
+					modFailures[k] = v
+				}
+			}
+
+			if len(modFailures) == 0 {
+				errStr := "failed"
+				if res.Err != nil {
+					errStr = res.Err.Error()
+				}
+				fmt.Fprintf(w, "%s%s %s\n", prefix, attrColor("["+res.Dir+"]"), failColor(errStr))
+			} else {
+				for _, key := range modFailures.OrderedKeys() {
+					events := modFailures[key]
+					var elapsed float64
+					if fe := events.FindFirstByAction(EndingActions...); fe != nil {
+						elapsed = fe.Elapsed
+					}
+					badges := r.formatBadges(events, elapsed)
+
+					if key.Test == "" {
+						fmt.Fprintf(w, "%s%s %s%s\n", prefix, attrColor("["+res.Dir+"]"), packageColor(key.Package), badges)
+					} else {
+						fmt.Fprintf(w, "%s%s %s.%s%s\n", prefix, attrColor("["+res.Dir+"]"), packageColor(key.Package), testColor(key.Test), badges)
+					}
+				}
+			}
+		}
+	}
+
+	// Print aggregated coverage for all modules if any coverage data was recorded
+	var allCovered []struct {
+		dir      string
+		coverage string
+		pkg      string
+	}
+	for _, res := range results {
+		covered := res.Storage.WithCoverage()
+		for _, key := range covered.OrderedKeys() {
+			events := covered[key]
+			if key.Test == "" {
+				cov := events.FindCoverage()
+				if len(cov) > 0 {
+					cov = fmt.Sprintf("%6s ", cov)
+				}
+				allCovered = append(allCovered, struct {
+					dir      string
+					coverage string
+					pkg      string
+				}{
+					dir:      res.Dir,
+					coverage: cov,
+					pkg:      key.Package,
+				})
+			}
+		}
+	}
+
+	if len(allCovered) > 0 {
+		hr := coverColor("════════════")
+		fmt.Fprintln(w, hr, coverColor("COVR"), hr)
+		for _, item := range allCovered {
+			fmt.Fprintf(w, "%s%s %s\n", coverColor(item.coverage), attrColor("["+item.dir+"]"), packageColor(item.pkg))
+		}
+	}
+
+	r.printRecursiveFooter(totalStats, passedModules, totalModules, skippedCount, t0)
+}
+
+func (r *Renderer) printRecursiveFooter(stats TestStats, passedModules, totalModules, skippedCount int, t0 time.Time) {
+	pass := statusNames[StatusPass] + ":" + fmt.Sprint(stats.Pass)
+	fail := statusNames[StatusFail] + ":" + fmt.Sprint(stats.Fail)
+	buildfail := statusNames[StatusBuildFail] + ":" + fmt.Sprint(stats.BuildFail)
+	none := statusNames[StatusNone] + ":" + fmt.Sprint(stats.None)
+	skip := statusNames[StatusSkip] + ":" + fmt.Sprint(stats.Skip)
+
+	statusColor := hardLineColor
+
+	if stats.Pass > 0 {
+		statusColor = passColorBold
+		pass = statusColor(pass)
+	}
+
+	if stats.None > 0 {
+		statusColor = noneColorBold
+		none = statusColor(none)
+	}
+
+	if stats.Fail > 0 || stats.BuildFail > 0 {
+		statusColor = failColorBold
+		fail = statusColor(fail)
+		buildfail = statusColor(buildfail)
+	}
+
+	modSummary := fmt.Sprintf("modules:%d/%d", passedModules, totalModules)
+	if skippedCount > 0 {
+		modSummary += fmt.Sprintf(",%d-skipped", skippedCount)
+	}
+	if passedModules < totalModules && (stats.Fail > 0 || stats.BuildFail > 0 || skippedCount > 0) {
+		modSummary = failColorBold(modSummary)
+	} else if passedModules == totalModules && totalModules > 0 {
+		modSummary = passColorBold(modSummary)
+	} else {
+		modSummary = statusColor(modSummary)
+	}
+
+	w := r.out()
+	fmt.Fprintln(w, "")
+	now := time.Now()
+	sep := " " + statusColor("|") + " "
+	status := statusColor("══════") + " " +
+		statusColor(now.Format("15:04:05")) +
+		sep + modSummary +
+		sep + pass +
+		sep + fail +
+		sep + buildfail +
+		sep + none +
+		sep + skip +
+		sep + statusColor(now.Sub(t0).Round(time.Millisecond).String()) +
+		"  " + statusColor("══════")
+
+	fmt.Fprintln(w, status)
+}

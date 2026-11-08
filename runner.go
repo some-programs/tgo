@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,7 +33,31 @@ func run(ctx context.Context, flags Flags, argv []string) error {
 // process killed by SIGINT.
 const exitInterrupted = ExitError(130)
 
+// ModuleRunResult records the test outcome for a single Go module.
+type ModuleRunResult struct {
+	Dir     string
+	Storage TestStorage
+	Err     error
+}
+
+// Failed reports whether this module run had any test or command failure.
+func (m ModuleRunResult) Failed() bool {
+	if m.Err != nil {
+		return true
+	}
+	stats := m.Storage.Stats()
+	return stats.Fail > 0 || stats.BuildFail > 0
+}
+
 func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, argv []string) error {
+	if flags.R != "" {
+		return runRecursive(parent, flags, renderer, argv)
+	}
+	_, err := runSingle(parent, flags, renderer, argv, true, true)
+	return err
+}
+
+func runSingle(parent context.Context, flags Flags, renderer *Renderer, argv []string, printHeader, printSummaryFooter bool) (TestStorage, error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
@@ -53,17 +78,18 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer stdout.Close()
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return nil, err
 	}
 
 	t0 := time.Now()
-	if err := processEvents(stdout, flags, renderer, t0); err != nil {
-		log.Println("process error:", err)
+	storage, procErr := processEventsInternal(stdout, flags, renderer, t0, printHeader, printSummaryFooter)
+	if procErr != nil {
+		log.Println("process error:", procErr)
 	}
 	// Drain what processEvents left unread, so go test can't block writing
 	// to a full pipe and keep cmd.Wait from returning.
@@ -71,16 +97,147 @@ func runWithRenderer(parent context.Context, flags Flags, renderer *Renderer, ar
 
 	cmdErr := cmd.Wait()
 	if parent.Err() != nil {
-		return exitInterrupted
+		return storage, exitInterrupted
 	}
 	var ee *exec.ExitError
 	if cmdErr != nil && errors.As(cmdErr, &ee) {
 		if ee.Exited() {
-			return ExitError(ee.ExitCode())
+			return storage, ExitError(ee.ExitCode())
 		}
-		return cmdErr
+		return storage, cmdErr
 	}
-	return nil
+	if procErr != nil {
+		return storage, procErr
+	}
+	return storage, nil
+}
+
+func runRecursive(parent context.Context, flags Flags, renderer *Renderer, argv []string) error {
+	if renderer == nil {
+		renderer = defaultRenderer
+	}
+
+	searchRoot := flags.R
+	if flags.Dir != "" && !filepath.IsAbs(flags.R) {
+		searchRoot = filepath.Join(flags.Dir, flags.R)
+	}
+
+	modules, err := findModules(searchRoot)
+	if err != nil {
+		return err
+	}
+	if len(modules) == 0 {
+		return fmt.Errorf("no go.mod found under %s", flags.R)
+	}
+
+	moduleArgv := argv
+	if !hasPackageTarget(argv) {
+		moduleArgv = append(slices.Clone(argv), "./...")
+	}
+
+	failFast := failFastRequested(argv)
+	t0 := time.Now()
+
+	renderer.PrintHeader()
+
+	var results []ModuleRunResult
+	var firstFailure error
+	skippedCount := 0
+
+	for i, modDir := range modules {
+		if parent.Err() != nil {
+			return exitInterrupted
+		}
+
+		relDir := modDir
+		if r, err := filepath.Rel(searchRoot, modDir); err == nil {
+			relDir = r
+		}
+		relDir = cleanRelDir(filepath.Clean(relDir))
+
+		renderer.PrintModuleHeader(relDir)
+
+		modFlags := flags
+		modFlags.Dir = modDir
+
+		storage, runErr := runSingle(parent, modFlags, renderer, moduleArgv, false, false)
+		res := ModuleRunResult{
+			Dir:     relDir,
+			Storage: storage,
+			Err:     runErr,
+		}
+		results = append(results, res)
+
+		if res.Failed() {
+			if firstFailure == nil {
+				if runErr != nil {
+					firstFailure = runErr
+				} else {
+					firstFailure = ExitError(1)
+				}
+			}
+			if failFast {
+				skippedCount = len(modules) - (i + 1)
+				break
+			}
+		}
+	}
+
+	renderer.PrintRecursiveSummary(results, skippedCount, t0)
+
+	if parent.Err() != nil {
+		return exitInterrupted
+	}
+	return firstFailure
+}
+
+// findModules searches root recursively for directories containing go.mod,
+// skipping .git, vendor, testdata, and hidden directories.
+func findModules(root string) ([]string, error) {
+	info, err := os.Stat(root)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", root)
+	}
+
+	var modules []string
+	cleanRoot := filepath.Clean(root)
+
+	err = filepath.WalkDir(cleanRoot, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if path != cleanRoot {
+				if strings.HasPrefix(name, ".") || name == "vendor" || name == "testdata" {
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+		if d.Name() == "go.mod" {
+			modules = append(modules, filepath.Dir(path))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(modules)
+	return modules, nil
+}
+
+func cleanRelDir(dir string) string {
+	if dir == "." {
+		return "."
+	}
+	if !filepath.IsAbs(dir) && !strings.HasPrefix(dir, "."+string(filepath.Separator)) && !strings.HasPrefix(dir, ".."+string(filepath.Separator)) {
+		return "." + string(filepath.Separator) + dir
+	}
+	return dir
 }
 
 // goTestArgs returns argv without any -v flags, since -v makes go test -json
@@ -124,6 +281,11 @@ type printState struct {
 }
 
 func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) error {
+	_, err := processEventsInternal(r, flags, renderer, t0, true, true)
+	return err
+}
+
+func processEventsInternal(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time, printHeader, printSummaryFooter bool) (TestStorage, error) {
 	if renderer == nil {
 		renderer = defaultRenderer
 	}
@@ -168,7 +330,9 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 		}
 	}
 
-	renderer.PrintHeader()
+	if printHeader {
+		renderer.PrintHeader()
+	}
 
 	for scanner.Scan() {
 		var e Event
@@ -218,28 +382,31 @@ func processEvents(r io.Reader, flags Flags, renderer *Renderer, t0 time.Time) e
 		results := maps.Clone(tests)
 		maps.Copy(results, unfinished)
 
-		// Print configured summaries
-		for _, status := range flags.Summary {
-			filtered := results.FindByStatus(status)
-			if status == StatusSkip && flags.V <= V3 {
-				filtered = filtered.FilterNotests()
+		if printSummaryFooter {
+			// Print configured summaries
+			for _, status := range flags.Summary {
+				filtered := results.FindByStatus(status)
+				if status == StatusSkip && flags.V <= V3 {
+					filtered = filtered.FilterNotests()
+				}
+				if len(filtered) > 0 {
+					renderer.PrintSummary(filtered, status)
+				}
 			}
-			if len(filtered) > 0 {
-				renderer.PrintSummary(filtered, status)
+
+			if covered := tests.WithCoverage(); len(covered) > 0 {
+				renderer.PrintCoverage(covered)
 			}
-		}
 
-		if covered := tests.WithCoverage(); len(covered) > 0 {
-			renderer.PrintCoverage(covered)
+			renderer.PrintFooter(results, t0)
 		}
-
-		renderer.PrintFooter(results, t0)
+		return results, scanner.Err()
 	}
 
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(w, "error reading go test output:", err)
-		return err
+		return nil, err
 	}
 
-	return nil
+	return tests, nil
 }

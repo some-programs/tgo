@@ -265,3 +265,49 @@ func setupTestDir(t *testing.T) string {
 	}
 	return dir
 }
+
+// setupMultiModuleTestDir creates a temporary directory populated with multiple Go modules for testing recursive mode.
+func setupMultiModuleTestDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	files := map[string]string{
+		"mod_a/go.mod": "module moda\n\ngo 1.27\n",
+		"mod_a/moda.go": `package moda
+func Hello() string { return "world" }
+`,
+		"mod_a/moda_test.go": `package moda
+import "testing"
+func TestModA(t *testing.T) {
+	if Hello() != "world" { t.Fatal("fail") }
+}
+`,
+		"mod_b/go.mod": "module modb\n\ngo 1.27\n",
+		"mod_b/modb_test.go": `package modb
+import "testing"
+func TestModB(t *testing.T) {
+	t.Errorf("fail from mod_b")
+}
+`,
+		"mod_c/go.mod": "module modc\n\ngo 1.27\n",
+		"mod_c/modc_test.go": `package modc
+import "testing"
+func TestModC(t *testing.T) {}
+`,
+		"vendor/mod_vendor/go.mod":     "module modvendor\n\ngo 1.27\n",
+		"testdata/mod_testdata/go.mod": "module modtestdata\n\ngo 1.27\n",
+		".hidden/mod_hidden/go.mod":    "module modhidden\n\ngo 1.27\n",
+	}
+
+	for relPath, content := range files {
+		target := filepath.Join(dir, relPath)
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			t.Fatalf("failed to create directory: %v", err)
+		}
+		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write file %s: %v", relPath, err)
+		}
+	}
+
+	return dir
+}

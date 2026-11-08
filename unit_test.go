@@ -24,6 +24,9 @@ func TestFlags_Register(t *testing.T) {
 	if fs.Lookup("summary") == nil {
 		t.Error("flag 'summary' not registered")
 	}
+	if fs.Lookup("r") == nil {
+		t.Error("flag 'r' not registered")
+	}
 }
 
 func TestFlags_PrintHelp(t *testing.T) {
@@ -34,16 +37,71 @@ func TestFlags_PrintHelp(t *testing.T) {
 	if sb.Len() == 0 {
 		t.Error("PrintHelp produced no output")
 	}
+	if !strings.Contains(sb.String(), "TGO_R=path") {
+		t.Error("PrintHelp missing TGO_R documentation")
+	}
 }
 
 func TestFlags_PrintConfig(t *testing.T) {
 	t.Parallel()
 	var f Flags
 	f.Results = Statuses{StatusPass}
+	f.R = "."
 	var sb strings.Builder
 	f.printConfig(&sb)
 	if !strings.Contains(sb.String(), "TGO_RESULTS: pass") {
 		t.Errorf("printConfig output missing expected content: %s", sb.String())
+	}
+	if !strings.Contains(sb.String(), "TGO_R: .") {
+		t.Errorf("printConfig output missing TGO_R: %s", sb.String())
+	}
+}
+
+func TestFailFastRequested(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{nil, false},
+		{[]string{"-v"}, false},
+		{[]string{"-failfast"}, true},
+		{[]string{"--failfast"}, true},
+		{[]string{"-failfast=true"}, true},
+		{[]string{"-failfast=false"}, false},
+		{[]string{"-test.failfast"}, true},
+		{[]string{"-test.failfast=true"}, true},
+		{[]string{"-test.failfast=false"}, false},
+		{[]string{"-v", "-failfast", "./..."}, true},
+		{[]string{"-args", "-failfast"}, false},
+	}
+	for _, tt := range tests {
+		if got := failFastRequested(tt.args); got != tt.want {
+			t.Errorf("failFastRequested(%v) = %v, want %v", tt.args, got, tt.want)
+		}
+	}
+}
+
+func TestHasPackageTarget(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{nil, false},
+		{[]string{"-v"}, false},
+		{[]string{"-v", "-count=1"}, false},
+		{[]string{"-run", "TestFoo"}, false},
+		{[]string{"-run=TestFoo"}, false},
+		{[]string{"./..."}, true},
+		{[]string{"-v", "./..."}, true},
+		{[]string{"-run", "TestFoo", "./pkg/..."}, true},
+		{[]string{"-args", "myarg"}, false},
+	}
+	for _, tt := range tests {
+		if got := hasPackageTarget(tt.args); got != tt.want {
+			t.Errorf("hasPackageTarget(%v) = %v, want %v", tt.args, got, tt.want)
+		}
 	}
 }
 
