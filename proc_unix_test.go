@@ -25,6 +25,7 @@ func TestRun_Interrupt(t *testing.T) {
 		// Interrupt once the test is running.
 		for ctx.Err() == nil {
 			if _, err := os.Stat(pidFile); err == nil {
+				time.Sleep(50 * time.Millisecond)
 				cancel()
 				return
 			}
@@ -50,7 +51,7 @@ func TestRun_Interrupt(t *testing.T) {
 
 	out := normalizeOutput(sb.String())
 	if !strings.Contains(out, "=== NONE testcases/interrupt.TestInterrupt") ||
-		!strings.Contains(out, "interrupt_test.go:19: waiting") {
+		!strings.Contains(out, "interrupt_test.go:13: waiting") {
 		t.Errorf("interrupted test not reported:\n%s", out)
 	}
 

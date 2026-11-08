@@ -215,13 +215,13 @@ import (
 // TestInterrupt writes its pid to a file so the caller knows it is running,
 // then waits to be interrupted.
 func TestInterrupt(t *testing.T) {
+	t.Log("waiting")
 	if err := os.WriteFile("pid.tmp", []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Rename("pid.tmp", "pid"); err != nil {
 		t.Fatal(err)
 	}
-	t.Log("waiting")
 	time.Sleep(time.Minute)
 }
 `),
